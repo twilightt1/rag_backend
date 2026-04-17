@@ -3,9 +3,21 @@ Document ingestion pipeline — sync Celery task.
 Uses sync SQLAlchemy + sync MinIO to avoid asyncio event loop conflicts.
 """
 import logging
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from app.tasks.celery_app import celery_app
+from app.config import settings
 
 log = logging.getLogger(__name__)
+
+sync_url = settings.DATABASE_URL.replace("+asyncpg", "+psycopg2")
+_sync_engine = create_engine(
+    sync_url,
+    pool_pre_ping=True,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW
+)
+SyncSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_sync_engine)
 
 
 @celery_app.task(
@@ -28,14 +40,7 @@ def process_document(self, document_id: str) -> None:
     8. Rebuild BM25 index for conversation
     9. Set status = ready
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
-    from app.config import settings
-
-    sync_url = settings.DATABASE_URL.replace("+asyncpg", "+psycopg2")
-    engine   = create_engine(sync_url, pool_pre_ping=True)
-
-    with Session(engine) as db:
+    with SyncSessionLocal() as db:
         try:
             _run_ingestion(db, document_id)
         except Exception as exc:
@@ -44,7 +49,7 @@ def process_document(self, document_id: str) -> None:
             raise self.retry(exc=exc)
 
 
-def _run_ingestion(db, document_id: str) -> None:
+def _run_ingestion(db: "sqlalchemy.orm.Session", document_id: str) -> None:
     from app.models.document import Document
     from app.models.document_chunk import DocumentChunk
     from app import storage as minio

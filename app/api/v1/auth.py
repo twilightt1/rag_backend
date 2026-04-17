@@ -1,14 +1,15 @@
 """Auth endpoints — register, verify, login, Google OAuth, forgot password."""
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.redis_client import get_redis
-from app.utils.dependencies import get_current_user, get_current_verified_user
-from app.utils.security import create_access_token
+from app.middleware.rate_limiter import check_rate_limit
+from app.utils.dependencies import get_current_user, get_current_verified_user, bearer
+from app.utils.security import create_access_token, decode_access_token
 from app.services import auth_service
 from app.services.oauth_service import google_oauth
 from app.schemas.auth import (
@@ -30,7 +31,13 @@ log    = logging.getLogger(__name__)
 
 # ── Register ──────────────────────────────────────────────────────────────────
 @router.post("/register", response_model=RegisterResponse, status_code=201)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    # Rate limit: 5 registrations per minute per IP
+    await check_rate_limit(f"ip:{request.client.host}", window_seconds=60, limit=5)
     await auth_service.register_email(db, body.email, body.password)
     return RegisterResponse(message="Registration successful. Check your email for a verification code.")
 
@@ -88,7 +95,13 @@ async def onboarding(
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 @router.post("/login", response_model=LoginResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request,
+    body: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    # Rate limit: 10 login attempts per minute per IP
+    await check_rate_limit(f"ip:{request.client.host}", window_seconds=60, limit=10)
     user, access, refresh = await auth_service.login_email(db, body.email, body.password)
     return LoginResponse(
         access_token=access,
@@ -172,12 +185,29 @@ async def refresh_token(refresh_token: str):
 # ── Logout ────────────────────────────────────────────────────────────────────
 @router.post("/logout", status_code=200)
 async def logout(
+    request: Request,
     refresh_token: str|None = None,
     current_user=Depends(get_current_user),
 ):
+    redis = await get_redis()
     if refresh_token:
-        redis = await get_redis()
         await redis.delete(f"refresh:{refresh_token}")
+
+    # Blacklist the current access token
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            payload = decode_access_token(token)
+            jti = payload.get("jti")
+            if jti:
+                # Add to blacklist with TTL matching standard expiration
+                # Using 1 hour (3600s) to be safe since ACCESS_TOKEN_EXPIRE_MINUTES is usually 15-30m
+                exp_seconds = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60 if hasattr(settings, 'ACCESS_TOKEN_EXPIRE_MINUTES') else 3600
+                await redis.setex(f"blacklist:{jti}", exp_seconds, "1")
+        except Exception as e:
+            log.warning(f"Failed to blacklist access token during logout: {e}")
+
     return {"message": "Logged out successfully."}
 
 

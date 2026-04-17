@@ -1,10 +1,11 @@
 """Authentication business logic."""
 from __future__ import annotations
-import logging, random, secrets, string
+import logging, secrets, string
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+import bcrypt
+import hashlib
 
-from passlib.context import CryptContext
 from sqlalchemy import select, update, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,15 +17,25 @@ from app.redis_client import get_redis
 from app.utils.security import create_access_token
 
 log     = logging.getLogger(__name__)
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 OTP_MAX = 5
 _now    = lambda: datetime.now(timezone.utc)
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
-def _hash(pw: str) -> str:            return pwd_ctx.hash(pw)
-def _verify(pw: str, h: str) -> bool: return pwd_ctx.verify(pw, h)
-def _otp() -> str:                    return "".join(random.choices(string.digits, k=6))
+def _hash(pw: str) -> str:
+    pw_bytes = pw.encode('utf-8')
+    if len(pw_bytes) > 72:
+        pw_bytes = hashlib.sha256(pw_bytes).hexdigest().encode('utf-8')
+    return bcrypt.hashpw(pw_bytes, bcrypt.gensalt()).decode('utf-8')
+
+def _verify(pw: str, h: str) -> bool:
+    pw_bytes = pw.encode('utf-8')
+    if len(pw_bytes) > 72:
+        pw_bytes = hashlib.sha256(pw_bytes).hexdigest().encode('utf-8')
+    try:
+        return bcrypt.checkpw(pw_bytes, h.encode('utf-8'))
+    except Exception:
+        return False
+def _otp() -> str:                    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 # ── Register ──────────────────────────────────────────────────────────────────

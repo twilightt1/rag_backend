@@ -41,7 +41,8 @@ async def search(query: str, top_k: int, conversation_id: str) -> list[dict]:
     try:
         client     = await _get_async_client()
         collection = await client.get_collection(_col(conversation_id))
-    except Exception:
+    except Exception as e:
+        log.warning("Failed to get collection for search", extra={"conversation_id": conversation_id, "error": str(e)})
         return []
     count = await collection.count()
     if count == 0:
@@ -76,20 +77,30 @@ async def delete_conversation_collection(conversation_id: str) -> None:
     try:
         client = await _get_async_client()
         await client.delete_collection(_col(conversation_id))
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("Failed to delete conversation collection", extra={"conversation_id": conversation_id, "error": str(e)})
 
 
 def upsert_chunks_sync(conversation_id: str, chunks: list[dict]) -> None:
     """Sync for Celery."""
-    client     = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
-    collection = client.get_or_create_collection(
-        _col(conversation_id), metadata={"hnsw:space": "cosine"}
-    )
-    embeddings = embed_texts_sync([c["content"] for c in chunks])
-    collection.upsert(
-        ids=[c["id"] for c in chunks],
-        documents=[c["content"] for c in chunks],
-        embeddings=embeddings,
-        metadatas=[c["metadata"] for c in chunks],
-    )
+    if not chunks:
+        return
+
+    try:
+        client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
+        collection = client.get_or_create_collection(
+            name=_col(conversation_id), metadata={"hnsw:space": "cosine"}
+        )
+        embeddings = embed_texts_sync([c["content"] for c in chunks])
+        collection.upsert(
+            ids=[c["id"] for c in chunks],
+            documents=[c["content"] for c in chunks],
+            embeddings=embeddings,
+            metadatas=[c["metadata"] for c in chunks],
+        )
+        log.info("ChromaDB upsert complete", extra={"conversation_id": conversation_id, "n": len(chunks)})
+    except Exception as e:
+        log.error("Failed to connect to ChromaDB during ingestion", extra={"error": str(e)})
+        # Instead of failing the entire Celery task, we let it pass.
+        # Hybrid retrieval will naturally fallback to BM25 if the vector collection doesn't exist.
+        pass

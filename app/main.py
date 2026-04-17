@@ -45,5 +45,5 @@ app.include_router(api_router)
 
 
 @app.get("/health", tags=["health"])
-async def health():
+async def health() -> JSONResponse:
     return JSONResponse({"status": "ok", "version": "1.0.0"})

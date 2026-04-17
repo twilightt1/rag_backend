@@ -16,6 +16,14 @@ class EmailService:
         self._from = From(email=settings.EMAIL_FROM, name=settings.EMAIL_FROM_NAME)
 
     def _send(self, to: str, subject: str, html: str) -> None:
+        if not settings.SENDGRID_API_KEY:
+            log.warning("SENDGRID_API_KEY is not set. Mocking email send.", extra={"to": to, "subject": subject})
+            print(f"\n--- MOCK EMAIL TO {to} ---")
+            print(f"Subject: {subject}")
+            print(html)
+            print("--------------------------\n")
+            return
+
         msg = Mail(
             from_email=self._from,
             to_emails=To(to),

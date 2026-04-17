@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import EmailStr
+from pydantic import EmailStr, model_validator
 
 
 class Settings(BaseSettings):
@@ -30,8 +30,8 @@ class Settings(BaseSettings):
 
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = "minioadmin"
-    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_ACCESS_KEY: str | None = None
+    MINIO_SECRET_KEY: str | None = None
     MINIO_BUCKET: str = "rag-docs"
     MINIO_SECURE: bool = False
 
@@ -69,6 +69,18 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def check_minio_credentials(self):
+        if self.ENVIRONMENT == "production":
+            if not self.MINIO_ACCESS_KEY or not self.MINIO_SECRET_KEY:
+                raise ValueError("MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set in production")
+        else:
+            if not self.MINIO_ACCESS_KEY:
+                self.MINIO_ACCESS_KEY = "minioadmin"
+            if not self.MINIO_SECRET_KEY:
+                self.MINIO_SECRET_KEY = "minioadmin"
+        return self
 
 
 settings = Settings()

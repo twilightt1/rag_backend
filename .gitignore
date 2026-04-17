@@ -15,3 +15,4 @@ data/
 chroma_db/
 minio_data/
 alembic/versions/*.pyc
+run_error_logs.md

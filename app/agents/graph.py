@@ -1,5 +1,6 @@
 """LangGraph RAG pipeline."""
 from langgraph.graph import StateGraph, END
+from langgraph.graph.state import CompiledStateGraph
 from app.agents.state        import AgentState
 from app.agents.router_agent   import router_agent
 from app.agents.memory_agent   import memory_load_agent, memory_save_agent
@@ -12,7 +13,7 @@ def _route(state: AgentState) -> str:
     return state["query_type"]   # "rag" | "chitchat"
 
 
-def build_graph():
+def build_graph() -> CompiledStateGraph:
     g = StateGraph(AgentState)
 
     g.add_node("router",    router_agent)
