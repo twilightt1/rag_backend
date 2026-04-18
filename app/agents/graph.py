@@ -10,7 +10,7 @@ from app.agents.answer_agent    import answer_agent
 
 
 def _route(state: AgentState) -> str:
-    return state["query_type"]   # "rag" | "chitchat"
+    return state["query_type"]   # "rag" | "chitchat" | "summarize"
 
 
 def build_graph() -> CompiledStateGraph:
@@ -26,8 +26,9 @@ def build_graph() -> CompiledStateGraph:
     g.set_entry_point("router")
 
     g.add_conditional_edges("router", _route, {
-        "rag":      "memory",
-        "chitchat": "answer",
+        "rag":       "memory",
+        "summarize": "memory",
+        "chitchat":  "answer",
     })
     g.add_edge("memory",    "retrieval")
     g.add_edge("retrieval", "reranker")

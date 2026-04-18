@@ -11,6 +11,13 @@ async def reranker_agent(state: AgentState) -> AgentState:
         state["reranked_chunks"] = []
         state["agent_trace"]["reranker"] = "skipped"
         return state
+
+    if state.get("query_type") == "summarize":
+        # Do not rerank for summarize, we want to include all chunks
+        state["reranked_chunks"] = chunks
+        state["agent_trace"]["reranker"] = "skipped_for_summarize"
+        return state
+
     try:
         reranked = await rerank(state["query"], chunks)
         state["reranked_chunks"] = reranked

@@ -1,6 +1,6 @@
-from typing import TypedDict
+from typing import TypedDict, Any
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     user_id:         str
     conversation_id: str
     query:           str
@@ -17,3 +17,4 @@ class AgentState(TypedDict):
     should_stream:   bool
     has_documents:   bool
     document_count:  int
+    _stream_callback: Any
