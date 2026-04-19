@@ -1,94 +1,115 @@
-"""BM25 in-memory retriever — per conversation."""
+"""
+BM25 retriever — in-memory, per conversation.
+
+Indexes PARENT chunks (large, ~1500 chars) for keyword search.
+This gives better BM25 signal than tiny child chunks.
+"""
+from __future__ import annotations
 import logging
 import numpy as np
-from collections import OrderedDict
 from rank_bm25 import BM25Okapi
 
 log = logging.getLogger(__name__)
 
 
 class BM25Retriever:
-    def __init__(self, max_size: int = 100):
-        # LRU Cache: conversation_id -> (chunk_count, index, chunks)
-        self._indexes: OrderedDict[str, tuple[int, BM25Okapi, list[dict]]] = OrderedDict()
-        self.max_size = max_size
+    def __init__(self):
+        # { conversation_id: (BM25Okapi, [chunk_dict]) }
+        self._indexes: dict[str, tuple[BM25Okapi, list[dict]]] = {}
 
-    async def _get_or_build_index(self, conversation_id: str) -> tuple[BM25Okapi, list[dict]] | None:
-        from app.database import AsyncSessionLocal
-        from sqlalchemy import select, func
+    # ── Build / rebuild ───────────────────────────────────────────────────────
+
+    def build_from_parents(self, conversation_id: str, parents: list[dict]) -> None:
+        """
+        Build index from parent dicts: [{ id, content, metadata }].
+        Called by Celery ingestion task after new document is processed.
+        """
+        if not parents:
+            self._indexes.pop(conversation_id, None)
+            return
+        tokenized = [p["content"].lower().split() for p in parents]
+        self._indexes[conversation_id] = (BM25Okapi(tokenized), parents)
+        log.info("BM25 built", extra={"conversation_id": conversation_id, "n": len(parents)})
+
+    def rebuild_sync(self, db, conversation_id: str) -> None:
+        """
+        Rebuild from DB — called after document deletion.
+        Only loads parent chunks (chunk_type == "parent").
+        """
+        from sqlalchemy import select
         from app.models.document_chunk import DocumentChunk
         from app.models.document import Document
 
-        async with AsyncSessionLocal() as db:
-            # 1. Check current chunk count to detect new documents from Celery
-            count_res = await db.execute(
-                select(func.count(DocumentChunk.id))
-                .join(Document, DocumentChunk.document_id == Document.id)
-                .where(Document.conversation_id == conversation_id, Document.status == "ready")
+        rows = db.execute(
+            select(DocumentChunk)
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(
+                Document.conversation_id == conversation_id,
+                Document.status == "ready",
+                # Only parent chunks
+                DocumentChunk.metadata["chunk_type"].astext == "parent",
             )
-            current_count = count_res.scalar() or 0
+            .order_by(DocumentChunk.created_at)
+        ).scalars().all()
 
-            if current_count == 0:
-                self._indexes.pop(conversation_id, None)
-                return None
+        if not rows:
+            self._indexes.pop(conversation_id, None)
+            return
 
-            # 2. Check LRU Cache
-            if conversation_id in self._indexes:
-                cached_count, index, chunks = self._indexes[conversation_id]
-                if cached_count == current_count:
-                    self._indexes.move_to_end(conversation_id)
-                    return index, chunks
-
-            # 3. Cache Miss or Stale -> Rebuild
-            result = await db.execute(
-                select(DocumentChunk)
-                .join(Document, DocumentChunk.document_id == Document.id)
-                .where(Document.conversation_id == conversation_id, Document.status == "ready")
-                .order_by(DocumentChunk.created_at)
-            )
-            rows = result.scalars().all()
-
-            if not rows:
-                self._indexes.pop(conversation_id, None)
-                return None
-
-            chunk_dicts = [{"id": str(c.id), "content": c.content, "metadata": c.chunk_metadata} for c in rows]
-            index = BM25Okapi([c["content"].lower().split() for c in chunk_dicts])
-
-            # Store in LRU cache
-            self._indexes[conversation_id] = (len(rows), index, chunk_dicts)
-            self._indexes.move_to_end(conversation_id)
-
-            # Evict if over capacity
-            if len(self._indexes) > self.max_size:
-                self._indexes.popitem(last=False)
-
-            log.info("BM25 hydrated dynamically", extra={"conversation_id": conversation_id, "n": len(chunk_dicts)})
-            return index, chunk_dicts
-
-    def rebuild_sync(self, db, conversation_id: str) -> None:
-        # No-op: indexes are built dynamically on search to prevent process desync
-        pass
+        parents = [{"id": str(c.id), "content": c.content, "metadata": c.metadata} for c in rows]
+        self.build_from_parents(conversation_id, parents)
 
     async def rebuild_async(self, db, conversation_id: str) -> None:
-        # No-op: indexes are built dynamically on search to prevent process desync
-        pass
+        """Async rebuild — called after document deletion from API."""
+        from sqlalchemy import select
+        from app.models.document_chunk import DocumentChunk
+        from app.models.document import Document
+
+        result = await db.execute(
+            select(DocumentChunk)
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(
+                Document.conversation_id == conversation_id,
+                Document.status == "ready",
+                DocumentChunk.metadata["chunk_type"].astext == "parent",
+            )
+            .order_by(DocumentChunk.created_at)
+        )
+        rows = result.scalars().all()
+
+        if not rows:
+            self._indexes.pop(conversation_id, None)
+            return
+
+        parents = [{"id": str(c.id), "content": c.content, "metadata": c.metadata} for c in rows]
+        self.build_from_parents(conversation_id, parents)
+
+    # ── Search ────────────────────────────────────────────────────────────────
 
     async def search(self, query: str, top_k: int, conversation_id: str) -> list[dict]:
-        loaded = await self._get_or_build_index(conversation_id)
+        loaded = self._indexes.get(conversation_id)
         if not loaded:
             return []
+
         index, chunks = loaded
         scores = index.get_scores(query.lower().split())
         top_n  = np.argsort(scores)[::-1][:top_k]
+
         return [
-            {"content": chunks[i]["content"], "score": float(scores[i]),
-             "source": "bm25", "rank": rank, "metadata": chunks[i]["metadata"]}
-            for rank, i in enumerate(top_n) if scores[i] > 0
+            {
+                "content":   chunks[i]["content"],
+                "score":     float(scores[i]),
+                "source":    "bm25",
+                "rank":      rank,
+                "metadata":  chunks[i]["metadata"],
+                "parent_id": chunks[i]["id"],   # BM25 returns parent directly
+            }
+            for rank, i in enumerate(top_n)
+            if scores[i] > 0
         ]
 
     def invalidate(self, conversation_id: str) -> None:
         self._indexes.pop(conversation_id, None)
 
 
-bm25_retriever = BM25Retriever(max_size=100)
+bm25_retriever = BM25Retriever()
