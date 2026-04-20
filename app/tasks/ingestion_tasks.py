@@ -34,9 +34,16 @@ def process_document(self, document_id: str) -> None:
         try:
             _ingest(db, document_id)
         except Exception as exc:
-            _fail(db, document_id, str(exc))
-            log.error("Ingestion failed", extra={"doc_id": document_id, "error": str(exc)})
-            raise self.retry(exc=exc)
+            from celery.exceptions import Retry
+            try:
+                raise self.retry(exc=exc)
+            except Retry:
+                log.warning("Ingestion failed, retrying...", extra={"doc_id": document_id, "error": str(exc)})
+                raise
+            except Exception as final_exc:
+                _fail(db, document_id, str(final_exc))
+                log.error("Ingestion failed permanently", extra={"doc_id": document_id, "error": str(final_exc)})
+                raise
 
 
 def _ingest(db, document_id: str) -> None:

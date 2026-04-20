@@ -10,14 +10,63 @@ HyDE support: caller passes hyde_text instead of the raw query for embedding.
 from __future__ import annotations
 import logging
 import chromadb
+import asyncio
+import time
+import httpx
+from typing import Callable, Any
 from app.config import settings
 from app.retrieval.embedder import embed_texts, embed_query, embed_texts_sync
 
 log = logging.getLogger(__name__)
 _async_client: chromadb.AsyncHttpClient | None = None
+_sync_client: chromadb.HttpClient | None = None
 
 
-async def _client() -> chromadb.AsyncHttpClient:
+def with_retry(retries: int = 3, base_delay: float = 1.0):
+    """Simple exponential backoff retry decorator for ChromaDB connections."""
+    def decorator(func: Callable):
+        if asyncio.iscoroutinefunction(func):
+            async def async_wrapper(*args, **kwargs):
+                last_exc = None
+                for i in range(retries):
+                    try:
+                        return await func(*args, **kwargs)
+                    except (ValueError, httpx.ConnectError, httpx.HTTPError, Exception) as e:
+                        last_exc = e
+                        # Retry on connection errors or ValueErrors (ChromaDB's custom connection error)
+                        if any(msg in str(e) for msg in ["Could not connect", "connection", "Refused"]) or \
+                           isinstance(e, (ValueError, httpx.ConnectError)):
+                            delay = base_delay * (2 ** i)
+                            log.warning(f"Chroma connection failed (attempt {i+1}/{retries}). Retrying in {delay}s...", extra={"error": str(e)})
+                            await asyncio.sleep(delay)
+                        else:
+                            raise e
+                log.error("Failed to connect to Chroma after all retries.", extra={"error": str(last_exc)})
+                raise last_exc
+            return async_wrapper
+        else:
+            def sync_wrapper(*args, **kwargs):
+                last_exc = None
+                for i in range(retries):
+                    try:
+                        return func(*args, **kwargs)
+                    except (ValueError, httpx.ConnectError, httpx.HTTPError, Exception) as e:
+                        last_exc = e
+                        if any(msg in str(e) for msg in ["Could not connect", "connection", "Refused"]) or \
+                           isinstance(e, (ValueError, httpx.ConnectError)):
+                            delay = base_delay * (2 ** i)
+                            log.warning(f"Chroma connection failed (attempt {i+1}/{retries}). Retrying in {delay}s...", extra={"error": str(e)})
+                            time.sleep(delay)
+                        else:
+                            raise e
+                log.error("Failed to connect to Chroma after all retries.", extra={"error": str(last_exc)})
+                raise last_exc
+            return sync_wrapper
+    return decorator
+
+
+@with_retry()
+async def _get_async_client() -> chromadb.AsyncHttpClient:
     global _async_client
     if _async_client is None:
         _async_client = await chromadb.AsyncHttpClient(
@@ -25,6 +74,17 @@ async def _client() -> chromadb.AsyncHttpClient:
             port=settings.CHROMA_PORT,
         )
     return _async_client
+
+
+@with_retry()
+def _get_sync_client() -> chromadb.HttpClient:
+    global _sync_client
+    if _sync_client is None:
+        _sync_client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST,
+            port=settings.CHROMA_PORT,
+        )
+    return _sync_client
 
 
 def _col_name(conversation_id: str) -> str:
@@ -40,7 +100,7 @@ async def upsert_chunks(conversation_id: str, chunks: list[dict]) -> None:
     """
     if not chunks:
         return
-    cli        = await _client()
+    cli        = await _get_async_client()
     collection = await cli.get_or_create_collection(
         _col_name(conversation_id),
         metadata={"hnsw:space": "cosine"},
@@ -57,7 +117,9 @@ async def upsert_chunks(conversation_id: str, chunks: list[dict]) -> None:
 
 def upsert_chunks_sync(conversation_id: str, chunks: list[dict]) -> None:
     """Sync for Celery."""
-    cli        = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
+    if not chunks:
+        return
+    cli        = _get_sync_client()
     collection = cli.get_or_create_collection(
         _col_name(conversation_id),
         metadata={"hnsw:space": "cosine"},
@@ -84,7 +146,7 @@ async def search(
     Returns list of child chunk dicts with content + metadata.
     """
     try:
-        cli        = await _client()
+        cli        = await _get_async_client()
         collection = await cli.get_collection(_col_name(conversation_id))
     except Exception:
         return []
@@ -97,6 +159,7 @@ async def search(
     embed_input = hyde_text if hyde_text else query
     embedding   = await embed_query(embed_input)
 
+    # Use await for AsyncCollection methods
     results = await collection.query(
         query_embeddings=[embedding],
         n_results=min(top_k, count),
@@ -127,7 +190,7 @@ async def search(
 
 async def delete_document_chunks(conversation_id: str, document_id: str) -> None:
     try:
-        cli        = await _client()
+        cli        = await _get_async_client()
         collection = await cli.get_collection(_col_name(conversation_id))
         results    = await collection.get(where={"document_id": {"$eq": document_id}})
         if results["ids"]:
@@ -138,7 +201,7 @@ async def delete_document_chunks(conversation_id: str, document_id: str) -> None
 
 async def delete_conversation_collection(conversation_id: str) -> None:
     try:
-        cli = await _client()
+        cli = await _get_async_client()
         await cli.delete_collection(_col_name(conversation_id))
     except Exception:
         pass
