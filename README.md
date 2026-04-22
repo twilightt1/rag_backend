@@ -22,12 +22,12 @@ Designed for scalability and production-grade performance, it integrates hybrid 
 
 | Feature | Description |
 | :--- | :--- |
-| **🤖 Multi-Agent Workflow** | Stateful, multi-step orchestration using LangGraph. |
-| **🧭 Dynamic Routing** | Smart classification of queries into `rag`, `chitchat`, or `summarize`. |
+| **🤖 Multi-Agent Workflow** | Stateful, multi-step orchestration using LangGraph (Router, Evaluator, Hallucination, etc.). |
+| **🧭 Dynamic Routing** | Smart classification of queries into `rag`, `chitchat`, `summarize`, or `clarify`. |
 | **🔍 Hybrid Retrieval** | Merges semantic **Vector Search** (ChromaDB) with lexical **BM25** via RRF. |
 | **🎯 Advanced Reranking** | Cross-encoder refinement using **Jina AI Reranker** for top-tier precision. |
 | **🧠 Intelligent Memory** | Multi-turn dialogue coherence through stateful history management. |
-| **⚡ Streaming SSE** | Real-time response generation with Server-Sent Events. |
+| **🔄 Self-Correction** | Hallucination and relevance grading with automatic re-retrieval. |
 | **🚀 Production Ready** | Redis caching, Celery background tasks, and MinIO storage. |
 
 ---
@@ -38,10 +38,11 @@ Designed for scalability and production-grade performance, it integrates hybrid 
 - **Orchestration**: [LangGraph](https://python.langchain.com/docs/langgraph) / [LangChain](https://python.langchain.com/)
 - **Vector DB**: [ChromaDB](https://www.trychroma.com/)
 - **Reranker**: [Jina AI](https://jina.ai/)
+- **Embedder**: NVIDIA Llama-Nemotron
 - **Database**: [PostgreSQL](https://www.postgresql.org/) with SQLAlchemy (Async)
 - **Object Storage**: [MinIO](https://min.io/) (S3 Compatible)
 - **Cache & Tasks**: [Redis](https://redis.io/) & [Celery](https://docs.celeryq.dev/)
-- **LLM Gateway**: [OpenRouter](https://openrouter.ai/) (Gemma 2, Llama 3, etc.)
+- **LLM Gateway**: [OpenRouter](https://openrouter.ai/)
 
 ---
 
@@ -49,16 +50,24 @@ Designed for scalability and production-grade performance, it integrates hybrid 
 
 ```mermaid
 graph TD
-    User([User Query]) --> Router{Router Agent}
+    User([User Query]) --> Rewriter[Query Rewriter]
+    Rewriter --> Router{Router Agent}
     
     Router -- rag/summarize --> Memory[Memory Agent]
     Router -- chitchat --> Answer[Answer Agent]
+    Router -- clarify --> Clarify[Clarify Node]
     
     Memory --> Retrieval[Retrieval Agent]
-    Retrieval --> Reranker[Reranker Agent]
-    Reranker --> Answer
+    Retrieval --> Evaluator[Evaluator Agent]
     
-    Answer --> Save[Save Agent]
+    Evaluator -- irrelevant --> Retrieval
+    Evaluator -- relevant --> Answer
+    
+    Answer --> Hallucination[Hallucination Agent]
+    Hallucination -- hallucinated --> Retrieval
+    Hallucination -- grounded --> Save[Save Agent]
+    
+    Clarify --> Save
     Save --> End([Stream Response])
     
     subgraph "Hybrid Search"
@@ -103,10 +112,12 @@ Create a `.env` file in the root directory:
 
 ```env
 # 🐘 Database
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/rag_db
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/ragdb
 
-# 🔴 Cache
+# 🔴 Cache & Celery
 REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/1
+CELERY_RESULT_BACKEND=redis://localhost:6379/2
 
 # 🤖 LLM (OpenRouter)
 OPENROUTER_API_KEY=your_openrouter_key
@@ -124,6 +135,11 @@ MINIO_BUCKET=rag-docs
 # 🔎 Vector Store (ChromaDB)
 CHROMA_HOST=localhost
 CHROMA_PORT=8001
+
+# 🔑 Auth
+JWT_SECRET_KEY=your_very_secret_key
+GOOGLE_CLIENT_ID=your_google_id
+GOOGLE_CLIENT_SECRET=your_google_secret
 ```
 
 ---

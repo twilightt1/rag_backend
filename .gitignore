@@ -20,3 +20,5 @@ ignoregit/
 docs/
 chroma/
 chromadata/
+.ruff_cache/
+tests/
