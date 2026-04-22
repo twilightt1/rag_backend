@@ -44,8 +44,16 @@ async def retrieval_agent(state: AgentState) -> AgentState:
         return state
 
     # ── Cache check ───────────────────────────────────────────────────────────
+    retry_count = state.get("retry_count", 0)
+
+    # Scale retrieval parameters based on retry count to fetch deeper results
+    dyn_k_raw = TOP_K_RAW + (retry_count * 10)
+    dyn_k_fuse = TOP_K_FUSE + (retry_count * 10)
+    dyn_n_final = TOP_N_FINAL + (retry_count * 3)
+    dyn_n_variants = 3 + retry_count
+
     query_hash = hashlib.md5(
-        f"{state['query']}::{json.dumps(state.get('history', [])[-2:])}"
+        f"{state['query']}::{json.dumps(state.get('history', [])[-2:])}::retry:{retry_count}"
         .encode()
     ).hexdigest()
     cache_key = f"rag:query:conv:{cid}:{query_hash}"
@@ -66,7 +74,7 @@ async def retrieval_agent(state: AgentState) -> AgentState:
         use_rewrite=True,
         use_multi_query=True,
         use_hyde=True,
-        n_variants=3,
+        n_variants=dyn_n_variants,
     )
     state["agent_trace"]["query_processing"] = bundle.to_dict()
 
@@ -75,13 +83,13 @@ async def retrieval_agent(state: AgentState) -> AgentState:
     queries = bundle.all_queries()
 
     # BM25: run on standalone only (BM25 doesn't benefit from HyDE)
-    bm25_res = await bm25_retriever.search(bundle.standalone, TOP_K_RAW, cid)
+    bm25_res = await bm25_retriever.search(bundle.standalone, dyn_k_raw, cid)
     if bm25_res:
         all_result_lists.append(bm25_res)
 
     # Vector: run on all query variants + HyDE in parallel
     async def _vector(q: str, hyde: str | None = None):
-        return await vector_search(q, TOP_K_RAW, cid, hyde_text=hyde)
+        return await vector_search(q, dyn_k_raw, cid, hyde_text=hyde)
 
     vector_tasks = [_vector(q) for q in queries]
     # Extra: HyDE-based vector search
@@ -98,14 +106,14 @@ async def retrieval_agent(state: AgentState) -> AgentState:
         return state
 
     # ── Step 4: RRF fusion ────────────────────────────────────────────────────
-    fused_children = reciprocal_rank_fusion(all_result_lists)[:TOP_K_FUSE]
+    fused_children = reciprocal_rank_fusion(all_result_lists)[:dyn_k_fuse]
     state["fused_chunks"] = fused_children
 
     # ── Step 5: Parent-child expansion ────────────────────────────────────────
     parent_ids = list({
-        c["metadata"].get("parent_id", "")
+        c.get("parent_id") or c.get("metadata", {}).get("parent_id", "")
         for c in fused_children
-        if c["metadata"].get("parent_id")
+        if c.get("parent_id") or c.get("metadata", {}).get("parent_id")
     })
 
     from app.database import AsyncSessionLocal
@@ -118,7 +126,7 @@ async def retrieval_agent(state: AgentState) -> AgentState:
     expanded: list[dict]   = []
 
     for child in fused_children:
-        pid = child["metadata"].get("parent_id", "")
+        pid = child.get("parent_id") or child.get("metadata", {}).get("parent_id", "")
         if pid and pid not in seen_parents and pid in parent_map:
             parent = parent_map[pid]
             seen_parents.add(pid)
@@ -134,7 +142,7 @@ async def retrieval_agent(state: AgentState) -> AgentState:
 
     if not expanded:
         # Fallback: use children directly
-        expanded = fused_children[:TOP_N_FINAL]
+        expanded = fused_children[:dyn_n_final]
 
     state["agent_trace"]["parent_expansion"] = {
         "children_retrieved": len(fused_children),
@@ -142,24 +150,36 @@ async def retrieval_agent(state: AgentState) -> AgentState:
         "expanded":           len(expanded),
     }
 
-    # ── Step 6: Contextual compression ───────────────────────────────────────
+    # ── Step 6: Jina Reranker ─────────────────────────────────────────────────
     try:
-        compressed = await compress_chunks(bundle.standalone, expanded[:10])
-        state["agent_trace"]["compression"] = {
-            "before_avg_len": int(sum(len(c["content"]) for c in expanded[:10]) / max(1, len(expanded[:10]))),
-            "after_avg_len":  int(sum(len(c["content"]) for c in compressed) / max(1, len(compressed))),
-        }
-    except Exception as e:
-        log.warning("Compression failed", extra={"error": str(e)})
-        compressed = expanded[:10]
+        # If retry_count > 0, we can increase the reranker input scope to ensure we don't miss anything
+        rerank_input_size = max(15, dyn_n_final * 2)
+        reranked = await rerank(bundle.standalone, expanded[:rerank_input_size])
 
-    # ── Step 7: Jina Reranker ─────────────────────────────────────────────────
-    try:
-        reranked = await rerank(bundle.standalone, compressed)
-        final    = reranked[:TOP_N_FINAL]
+        # Filter by relevance score to prevent hallucination from irrelevant context
+        # On retries, lower the threshold slightly to increase recall if needed
+        MIN_RERANK_SCORE = max(0.01, 0.05 - (retry_count * 0.02))
+        top_reranked = [c for c in reranked if c.get("rerank_score", 0) > MIN_RERANK_SCORE][:dyn_n_final]
+
+        if not top_reranked and reranked:
+            # Fallback to the top 1 if all are below threshold but we must answer
+            top_reranked = reranked[:1]
+
     except Exception as e:
         log.warning("Reranker failed", extra={"error": str(e)})
-        final = compressed[:TOP_N_FINAL]
+        top_reranked = expanded[:dyn_n_final]
+
+    # ── Step 7: Contextual compression ───────────────────────────────────────
+    try:
+        compressed = await compress_chunks(bundle.standalone, top_reranked)
+        state["agent_trace"]["compression"] = {
+            "before_avg_len": int(sum(len(c["content"]) for c in top_reranked) / max(1, len(top_reranked))),
+            "after_avg_len":  int(sum(len(c["content"]) for c in compressed) / max(1, len(compressed))),
+        }
+        final = compressed
+    except Exception as e:
+        log.warning("Compression failed", extra={"error": str(e)})
+        final = top_reranked
 
     state["reranked_chunks"] = final
     state["agent_trace"]["retrieval"] = {

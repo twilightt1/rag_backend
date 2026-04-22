@@ -16,9 +16,9 @@ from dataclasses import dataclass, field
 log = logging.getLogger(__name__)
 
 PARENT_SIZE    = 1500
-PARENT_OVERLAP = 100
-CHILD_SIZE     = 300
-CHILD_OVERLAP  = 30
+PARENT_OVERLAP = 150
+CHILD_SIZE     = 400
+CHILD_OVERLAP  = 50
 
 
 @dataclass
@@ -83,9 +83,12 @@ def _extract_docx(data: bytes) -> str:
 
 def _recursive_split(text: str, size: int, overlap: int) -> list[str]:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
+    # Use regex-based sentence splitting for better semantic chunking
     sp = RecursiveCharacterTextSplitter(
-        chunk_size=size, chunk_overlap=overlap,
-        separators=["\n\n", "\n", ". ", " ", ""],
+        chunk_size=size,
+        chunk_overlap=overlap,
+        separators=[r"\n\n", r"\n", r"(?<=[.!?])\s+", r" "],
+        is_separator_regex=True
     )
     return [c for c in sp.split_text(text) if c.strip()]
 

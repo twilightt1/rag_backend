@@ -36,7 +36,7 @@ class GoogleOAuthService:
                 code=code,
                 redirect_uri=self._redirect_uri,
             )
-            resp = await client.get(GOOGLE_USERINFO, token=token)
+            resp = await client.get(GOOGLE_USERINFO)
             resp.raise_for_status()
             return resp.json()
 

@@ -17,3 +17,6 @@ minio_data/
 alembic/versions/*.pyc
 run_error_logs.md
 ignoregit/
+docs/
+chroma/
+chromadata/

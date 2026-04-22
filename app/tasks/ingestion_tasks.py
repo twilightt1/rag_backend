@@ -34,6 +34,7 @@ def process_document(self, document_id: str) -> None:
         try:
             _ingest(db, document_id)
         except Exception as exc:
+            db.rollback()  # Rollback any flushed chunks before retrying or failing
             from celery.exceptions import Retry
             try:
                 raise self.retry(exc=exc)
@@ -128,6 +129,7 @@ def _ingest(db, document_id: str) -> None:
 
     # 10. Mark ready
     doc.status      = "ready"
+    doc.error_msg   = None
     doc.chunk_count = len(parents)   # report parent count to user
     db.commit()
 

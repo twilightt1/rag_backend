@@ -178,16 +178,11 @@ async def send_message(
                 node = list(event.keys())[0]
                 data = event[node]
 
-                if node == "answer":
-                    # Stream each word of the response as it builds
+                if node == "save":
+                    # Yield the response only after hallucination checks are complete
                     current_response = data.get("response", "")
-                    already_sent     = len("".join(buffer))
-                    new_chunk        = current_response[already_sent:]
-                    if new_chunk:
-                        buffer.append(new_chunk)
-                        yield f"data: {json.dumps({'type': 'chunk', 'content': new_chunk})}\n\n"
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': current_response})}\n\n"
 
-                elif node == "save":
                     sources = [
                         {
                             "content":  c.get("content", "")[:200],

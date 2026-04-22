@@ -27,7 +27,12 @@ class BM25Retriever:
         if not parents:
             self._indexes.pop(conversation_id, None)
             return
-        tokenized = [p["content"].lower().split() for p in parents]
+        import re
+
+        def tokenize(text: str) -> list[str]:
+            return re.findall(r'\w+', text.lower())
+
+        tokenized = [tokenize(p["content"]) for p in parents]
         self._indexes[conversation_id] = (BM25Okapi(tokenized), parents)
         log.info("BM25 built", extra={"conversation_id": conversation_id, "n": len(parents)})
 
@@ -92,7 +97,9 @@ class BM25Retriever:
             return []
 
         index, chunks = loaded
-        scores = index.get_scores(query.lower().split())
+        import re
+        query_tokens = re.findall(r'\w+', query.lower())
+        scores = index.get_scores(query_tokens)
         top_n  = np.argsort(scores)[::-1][:top_k]
 
         return [

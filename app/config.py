@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # OpenRouter (LLM)
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
-    LLM_MODEL: str = "google/gemma-2-9b-it"
+    LLM_MODEL: str = "openrouter/elephant-alpha"
     LLM_TEMPERATURE: float = 0.7
     LLM_MAX_TOKENS: int = 2048
 
