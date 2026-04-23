@@ -1,0 +1,20 @@
+[
+  {
+    "id": "q1",
+    "query": "What is the warranty period for the product?",
+    "ground_truth_chunks": ["doc_warranty_1", "doc_warranty_2"],
+    "ground_truth_answer": "The warranty period is 12 months from the date of purchase."
+  },
+  {
+    "id": "q2",
+    "query": "How do I reset my password?",
+    "ground_truth_chunks": ["doc_auth_reset"],
+    "ground_truth_answer": "You can reset your password by clicking 'Forgot Password' on the login screen."
+  },
+  {
+    "id": "q3",
+    "query": "Does the system support multiple languages?",
+    "ground_truth_chunks": ["doc_features_i18n"],
+    "ground_truth_answer": "Yes, the system supports English, Vietnamese, and Spanish."
+  }
+]
