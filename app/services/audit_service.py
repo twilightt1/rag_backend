@@ -32,5 +32,5 @@ class AuditService:
             changes=changes or {}
         )
         db.add(log_entry)
-        # We don't commit here, we let the route handler commit the transaction
+                                                                               
         return log_entry

@@ -1,4 +1,3 @@
-"""Request ID + structured access log middleware."""
 import time
 import uuid
 import structlog

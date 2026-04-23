@@ -1,4 +1,3 @@
-"""Evaluator agent — grades retrieved documents against the query."""
 import logging
 import json
 from openai import AsyncOpenAI
@@ -62,15 +61,15 @@ async def evaluator_agent(state: AgentState) -> AgentState:
             result = json.loads(resp.choices[0].message.content.strip())
             return chunk, result.get("score", "no").lower() == "yes"
         except Exception:
-            return chunk, True  # fail-open để không block pipeline
+            return chunk, True                                     
 
-    # Grade tất cả song song
+                            
     results = await asyncio.gather(*[_grade_chunk(c) for c in chunks])
     
     relevant_chunks = [c for c, is_relevant in results if is_relevant]
     
     if relevant_chunks:
-        state["reranked_chunks"] = relevant_chunks  # chỉ giữ chunk liên quan
+        state["reranked_chunks"] = relevant_chunks                           
         state["context_relevant"] = True
     else:
         state["context_relevant"] = False

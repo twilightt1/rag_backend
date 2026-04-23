@@ -1,4 +1,3 @@
-"""LangGraph RAG pipeline."""
 from langgraph.graph import StateGraph, END, START
 from langgraph.graph.state import CompiledStateGraph
 from app.agents.state        import AgentState
@@ -10,7 +9,7 @@ from app.agents.hallucination_agent import hallucination_agent
 
 
 def _route(state: AgentState) -> str:
-    return state["query_type"]   # "rag" | "chitchat" | "summarize"
+    return state["query_type"]                                     
 
 
 def build_graph() -> CompiledStateGraph:

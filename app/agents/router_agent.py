@@ -18,8 +18,8 @@ def _get_client() -> AsyncOpenAI:
         )
     return _client
 
-# ROUTER_FIX
-# Regex fast-path: chitchat ONLY — do not add summarize here
+            
+                                                            
 CHITCHAT_PATTERN = re.compile(
     r"^(hello|hi|hey|xin chào|chào|alo|chào bạn|bạn khỏe|cảm ơn|thanks|thank you|ok|okay|bye|tạm biệt)[\s!?.]*$",
     re.IGNORECASE
@@ -61,13 +61,13 @@ Return ONLY valid JSON. No markdown, no explanation outside the JSON.
 {{"intent": "rag", "confidence": 0.95, "reasoning": "User asks about product specs", "rewritten_query": "What are the specifications of product X?", "search_variants": ["Product X technical details", "Features of product X", "Product X datasheet"]}}
 ## Output:"""
 
-# ROUTER_FIX
+            
 async def router_agent(state: AgentState) -> AgentState:
     state.setdefault("agent_trace", {})
     query = state.get("query", "").strip()
     q_lower = query.lower()
 
-    # Fast regex path
+                     
     if CHITCHAT_PATTERN.match(q_lower):
         state["query_type"] = "chitchat"
         state["rewritten_query"] = query
@@ -87,7 +87,7 @@ async def router_agent(state: AgentState) -> AgentState:
     if not history_str:
         history_str = "(empty)"
 
-    # LLM fallback path
+                       
     try:
         client = _get_client()
         prompt = ROUTER_SYSTEM.format(query=query, history=history_str.strip())
@@ -106,7 +106,7 @@ async def router_agent(state: AgentState) -> AgentState:
         )
         result_text = resp.choices[0].message.content.strip()
 
-        # Parse JSON output robustly
+                                    
         start_idx = result_text.find("{")
         end_idx = result_text.rfind("}")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
@@ -131,7 +131,7 @@ async def router_agent(state: AgentState) -> AgentState:
 
     except Exception as e:
         log.error(f"Router LLM error: {str(e)}")
-        # Safe default to chitchat on error
+                                           
         state["query_type"] = "chitchat"
         state["rewritten_query"] = query
         state["search_variants"] = []

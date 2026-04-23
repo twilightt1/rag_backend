@@ -11,7 +11,7 @@ async def check_and_increment(user_id: UUID, db: AsyncSession) -> None:
         .where(UserQuota.user_id == user_id)
     )
     if not quota:
-        return  # no quota record — allow
+        return                           
 
     if quota.requests_today >= quota.daily_limit:
         raise HTTPException(429, detail="Daily quota exceeded.")

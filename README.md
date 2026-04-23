@@ -1,4 +1,4 @@
-# 🚀 Multi-Agentic RAG System
+# 🚀 Hệ Thống RAG Đa Tác Tử (Multi-Agentic RAG System)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python" />
@@ -10,111 +10,111 @@
 
 ---
 
-## 🌟 Overview
+## 🌟 Tổng Quan
 
-A high-performance, **state-of-the-art Multi-Agentic RAG (Retrieval-Augmented Generation) system**. This backend leverages **LangGraph** to orchestrate complex data flows, ensuring high precision in retrieval, sophisticated reranking, and dynamic routing of user queries.
+Một hệ thống backend **RAG (Retrieval-Augmented Generation) Đa Tác Tử hiện đại** với hiệu suất cao. Backend này sử dụng **LangGraph** để điều phối các luồng dữ liệu phức tạp, đảm bảo độ chính xác cao trong việc truy xuất, xếp hạng lại (reranking) tinh vi, và định tuyến linh hoạt các truy vấn của người dùng.
 
-Designed for scalability and production-grade performance, it integrates hybrid search, intelligent memory, and streaming responses via SSE.
+Được thiết kế để có khả năng mở rộng và hiệu suất ở cấp độ sản phẩm thực tế (production-grade), hệ thống tích hợp tìm kiếm lai (hybrid search), bộ nhớ thông minh và phản hồi dạng luồng (streaming) qua SSE.
 
 ---
 
-## ✨ Key Features
+## ✨ Các Tính Năng Chính
 
-| Feature | Description |
+| Tính Năng | Mô Tả |
 | :--- | :--- |
-| **🤖 Multi-Agent Workflow** | Stateful, multi-step orchestration using LangGraph (Router, Evaluator, Hallucination, etc.). |
-| **🧭 Dynamic Routing** | Smart classification of queries into `rag`, `chitchat`, `summarize`, or `clarify`. |
-| **🔍 Hybrid Retrieval** | Merges semantic **Vector Search** (ChromaDB) with lexical **BM25** via RRF. |
-| **🎯 Advanced Reranking** | Cross-encoder refinement using **Jina AI Reranker** for top-tier precision. |
-| **🧠 Intelligent Memory** | Multi-turn dialogue coherence through stateful history management. |
-| **🔄 Self-Correction** | Hallucination and relevance grading with automatic re-retrieval. |
-| **🚀 Production Ready** | Redis caching, Celery background tasks, and MinIO storage. |
+| **🤖 Luồng Làm Việc Đa Tác Tử** | Điều phối nhiều bước, có trạng thái sử dụng LangGraph (Tác tử Định tuyến, Đánh giá, Ảo giác, v.v.). |
+| **🧭 Định Tuyến Động** | Phân loại thông minh các truy vấn thành `rag` (truy xuất), `chitchat` (trò chuyện), `summarize` (tóm tắt), hoặc `clarify` (làm rõ). |
+| **🔍 Tìm Kiếm Lai** | Kết hợp Tìm kiếm Ngữ nghĩa **Vector** (ChromaDB) với tìm kiếm từ vựng **BM25** thông qua RRF. |
+| **🎯 Xếp Hạng Lại (Reranking) Nâng Cao** | Tinh chỉnh cross-encoder sử dụng **Jina AI Reranker** để đạt độ chính xác hàng đầu. |
+| **🧠 Bộ Nhớ Thông Minh** | Đảm bảo tính nhất mạch trong hội thoại nhiều lượt thông qua quản lý lịch sử có trạng thái. |
+| **🔄 Tự Sửa Lỗi** | Đánh giá tính ảo giác và mức độ liên quan với khả năng tự động truy xuất lại. |
+| **🚀 Sẵn Sàng Cho Production** | Bộ đệm Redis, các tác vụ nền Celery, và lưu trữ MinIO. |
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Công Nghệ Sử Dụng
 
-- **Core Framework**: [FastAPI](https://fastapi.tiangolo.com/)
-- **Orchestration**: [LangGraph](https://python.langchain.com/docs/langgraph) / [LangChain](https://python.langchain.com/)
-- **Vector DB**: [ChromaDB](https://www.trychroma.com/)
-- **Reranker**: [Jina AI](https://jina.ai/)
-- **Embedder**: NVIDIA Llama-Nemotron
-- **Database**: [PostgreSQL](https://www.postgresql.org/) with SQLAlchemy (Async)
-- **Object Storage**: [MinIO](https://min.io/) (S3 Compatible)
-- **Cache & Tasks**: [Redis](https://redis.io/) & [Celery](https://docs.celeryq.dev/)
-- **LLM Gateway**: [OpenRouter](https://openrouter.ai/)
+- **Khung Cốt Lõi (Framework)**: [FastAPI](https://fastapi.tiangolo.com/)
+- **Điều Phối (Orchestration)**: [LangGraph](https://python.langchain.com/docs/langgraph) / [LangChain](https://python.langchain.com/)
+- **Cơ Sở Dữ Liệu Vector**: [ChromaDB](https://www.trychroma.com/)
+- **Xếp Hạng Lại (Reranker)**: [Jina AI](https://jina.ai/)
+- **Nhúng (Embedder)**: NVIDIA Llama-Nemotron
+- **Cơ Sở Dữ Liệu**: [PostgreSQL](https://www.postgresql.org/) với SQLAlchemy (Bất đồng bộ)
+- **Lưu Trữ Đối Tượng (Object Storage)**: [MinIO](https://min.io/) (Tương thích S3)
+- **Bộ Nhớ Đệm & Tác Vụ**: [Redis](https://redis.io/) & [Celery](https://docs.celeryq.dev/)
+- **Cổng LLM (LLM Gateway)**: [OpenRouter](https://openrouter.ai/)
 
 ---
 
-## 📈 System Architecture
+## 📈 Kiến Trúc Hệ Thống
 
 ```mermaid
 graph TD
-    User([User Query]) --> Rewriter[Query Rewriter]
-    Rewriter --> Router{Router Agent}
+    User([Truy Vấn Người Dùng]) --> Rewriter[Viết Lại Truy Vấn]
+    Rewriter --> Router{Tác Tử Định Tuyến}
     
-    Router -- rag/summarize --> Memory[Memory Agent]
-    Router -- chitchat --> Answer[Answer Agent]
-    Router -- clarify --> Clarify[Clarify Node]
+    Router -- rag/summarize --> Memory[Tác Tử Bộ Nhớ]
+    Router -- chitchat --> Answer[Tác Tử Trả Lời]
+    Router -- clarify --> Clarify[Nút Làm Rõ]
     
-    Memory --> Retrieval[Retrieval Agent]
-    Retrieval --> Evaluator[Evaluator Agent]
+    Memory --> Retrieval[Tác Tử Truy Xuất]
+    Retrieval --> Evaluator[Tác Tử Đánh Giá]
     
-    Evaluator -- irrelevant --> Retrieval
-    Evaluator -- relevant --> Answer
+    Evaluator -- không liên quan --> Retrieval
+    Evaluator -- có liên quan --> Answer
     
-    Answer --> Hallucination[Hallucination Agent]
-    Hallucination -- hallucinated --> Retrieval
-    Hallucination -- grounded --> Save[Save Agent]
+    Answer --> Hallucination[Tác Tử Ảo Giác]
+    Hallucination -- có ảo giác --> Retrieval
+    Hallucination -- dựa trên thực tế --> Save[Tác Tử Lưu Trữ]
     
     Clarify --> Save
-    Save --> End([Stream Response])
+    Save --> End([Luồng Phản Hồi])
     
-    subgraph "Hybrid Search"
-    Retrieval -.-> Vector[Vector Store]
-    Retrieval -.-> BM25[Lexical Search]
+    subgraph "Tìm Kiếm Lai"
+    Retrieval -.-> Vector[Lưu Trữ Vector]
+    Retrieval -.-> BM25[Tìm Kiếm Từ Vựng]
     end
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Bắt Đầu
 
-### 1. Prerequisites
+### 1. Yêu Cầu Cần Thiết
 - Python 3.10+
 - Docker & Docker Compose
 
-### 2. Setup & Installation
+### 2. Thiết Lập & Cài Đặt
 ```bash
-# Clone the repository
+# Clone kho lưu trữ
 git clone <repository-url>
 cd rag-backend
 
-# Initialize Virtual Environment
+# Khởi tạo Môi trường Ảo (Virtual Environment)
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Trên Windows: venv\Scripts\activate
 
-# Install Dependencies
+# Cài đặt các thư viện phụ thuộc
 pip install -r requirements.txt
 ```
 
-### 3. Launch Infrastructure
-Spin up the required services (MinIO, Redis, PostgreSQL, ChromaDB) with a single command:
+### 3. Khởi Chạy Cơ Sở Hạ Tầng
+Khởi động các dịch vụ cần thiết (MinIO, Redis, PostgreSQL, ChromaDB) chỉ bằng một lệnh:
 ```bash
 docker-compose up -d
 ```
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Cấu Hình
 
-Create a `.env` file in the root directory:
+Tạo tệp `.env` trong thư mục gốc:
 
 ```env
-# 🐘 Database
+# 🐘 Cơ Sở Dữ Liệu
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/ragdb
 
-# 🔴 Cache & Celery
+# 🔴 Bộ Đệm & Celery
 REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
@@ -126,17 +126,17 @@ LLM_MODEL=google/gemma-2-9b-it
 # 🎯 Jina Reranker
 JINA_API_KEY=your_jina_key
 
-# 📦 Storage (MinIO)
+# 📦 Lưu Trữ (MinIO)
 MINIO_ENDPOINT=localhost:9000
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=rag-docs
 
-# 🔎 Vector Store (ChromaDB)
+# 🔎 Cơ Sở Dữ Liệu Vector (ChromaDB)
 CHROMA_HOST=localhost
 CHROMA_PORT=8001
 
-# 🔑 Auth
+# 🔑 Xác Thực
 JWT_SECRET_KEY=your_very_secret_key
 GOOGLE_CLIENT_ID=your_google_id
 GOOGLE_CLIENT_SECRET=your_google_secret
@@ -144,26 +144,26 @@ GOOGLE_CLIENT_SECRET=your_google_secret
 
 ---
 
-## 🛤️ API Endpoints
+## 🛤️ Các API Endpoint
 
-| Method | Endpoint | Description |
+| Phương Thức | Endpoint | Mô Tả |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/chat/completions` | Main RAG/Chat entrypoint (Supports Streaming) |
-| `POST` | `/api/v1/documents/upload` | Document ingestion and embedding |
-| `GET` | `/api/v1/conversations` | Retrieve conversation history |
-| `GET` | `/health` | System health check |
+| `POST` | `/api/v1/chat/completions` | Điểm vào chính của RAG/Chat (Hỗ trợ Streaming) |
+| `POST` | `/api/v1/documents/upload` | Nhập tài liệu và nhúng (embedding) |
+| `GET` | `/api/v1/conversations` | Truy xuất lịch sử hội thoại |
+| `GET` | `/health` | Kiểm tra tình trạng hệ thống |
 
 ---
 
-## 🔍 Agent Traceability
+## 🔍 Khả Năng Theo Dõi Tác Tử
 
-Every response includes an `agent_trace` metadata object. This provides deep visibility into:
-- **Routing Decisions**: Why a specific path was chosen.
-- **Retrieval Metrics**: Scores from Vector and BM25 searches.
-- **Reranking Logic**: How the final context was prioritized.
+Mỗi phản hồi đều bao gồm một đối tượng siêu dữ liệu `agent_trace`. Điều này cung cấp khả năng hiển thị sâu vào:
+- **Các Quyết Định Định Tuyến**: Tại sao một luồng cụ thể được chọn.
+- **Số Liệu Truy Xuất**: Điểm số từ tìm kiếm Vector và BM25.
+- **Logic Xếp Hạng Lại**: Cách ưu tiên ngữ cảnh cuối cùng.
 
 ---
 
 <p align="center">
-  Built with ❤️ for High-Performance AI Applications
+  Được xây dựng với ❤️ dành cho Các Ứng Dụng AI Hiệu Suất Cao
 </p>

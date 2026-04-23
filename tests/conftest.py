@@ -34,7 +34,7 @@ async def setup_db():
         yield
     except Exception as e:
         print(f"Error connecting to test database. Please ensure postgres is running at {TEST_DATABASE_URL}: {e}")
-        # If the database doesn't exist, we can't run tests that depend on it
+                                                                             
         pytest.skip(f"Database not available: {e}")
     finally:
         try:

@@ -1,4 +1,3 @@
-"""Sliding window rate limiter via Redis sorted sets."""
 import time
 import logging
 from fastapi import HTTPException

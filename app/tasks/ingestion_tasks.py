@@ -34,7 +34,7 @@ def process_document(self, document_id: str) -> None:
         try:
             _ingest(db, document_id)
         except Exception as exc:
-            db.rollback()  # Rollback any flushed chunks before retrying or failing
+            db.rollback()                                                          
             from celery.exceptions import Retry
             try:
                 raise self.retry(exc=exc)
@@ -57,7 +57,7 @@ def _ingest(db, document_id: str) -> None:
     from app.retrieval.bm25_retriever import bm25_retriever
     from app.retrieval.parent_store import store_parents_sync
 
-    # 1. Load + mark processing
+                               
     doc = db.get(Document, document_id)
     if not doc:
         log.error("Document not found", extra={"doc_id": document_id})
@@ -67,15 +67,15 @@ def _ingest(db, document_id: str) -> None:
     doc.status = "processing"
     db.commit()
 
-    # 2. Download
+                 
     file_bytes = minio.get_object_sync(doc.file_path)
 
-    # 3. Extract text
+                     
     text = extract_text(file_bytes, doc.mime_type)
     if not text.strip():
         raise ValueError("Could not extract text content from file.")
 
-    # 4. Smart parent-child chunking
+                                    
     parents, children = build_parent_child_chunks(
         text=text,
         document_id=document_id,
@@ -85,7 +85,7 @@ def _ingest(db, document_id: str) -> None:
     if not children:
         raise ValueError("No chunks produced from document.")
 
-    # 5. INSERT parent chunks into DB (chunk_type = "parent")
+                                                             
     for p in parents:
         db.add(DocumentChunk(
             id=p.id,
@@ -96,7 +96,7 @@ def _ingest(db, document_id: str) -> None:
         ))
     db.flush()
 
-    # 6. INSERT child chunks into DB (chunk_type = "child", references parent)
+                                                                              
     for c in children:
         db.add(DocumentChunk(
             id=c.id,
@@ -107,30 +107,30 @@ def _ingest(db, document_id: str) -> None:
         ))
     db.flush()
 
-    # 7. Cache parents in Redis for fast lookup during retrieval
+                                                                
     store_parents_sync(
         conversation_id,
         [{"id": p.id, "content": p.content, "metadata": p.metadata} for p in parents],
     )
 
-    # 8. Embed + upsert CHILD chunks into ChromaDB
+                                                  
     child_dicts = [
         {"id": c.id, "content": c.content, "metadata": c.metadata}
         for c in children
     ]
     upsert_chunks_sync(conversation_id, child_dicts)
 
-    # 9. Build BM25 index on PARENT content (better semantic units for keyword search)
+                                                                                      
     parent_dicts = [
         {"id": p.id, "content": p.content, "metadata": p.metadata}
         for p in parents
     ]
     bm25_retriever.build_from_parents(conversation_id, parent_dicts)
 
-    # 10. Mark ready
+                    
     doc.status      = "ready"
     doc.error_msg   = None
-    doc.chunk_count = len(parents)   # report parent count to user
+    doc.chunk_count = len(parents)                                
     db.commit()
 
     log.info(

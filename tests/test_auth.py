@@ -45,7 +45,7 @@ async def test_login_wrong_password(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_forgot_password_unknown_email(client: AsyncClient):
-    # Should return 200 regardless (prevent enumeration)
+                                                        
     resp = await client.post("/api/v1/auth/forgot-password", json={
         "email": "nobody@example.com"
     })

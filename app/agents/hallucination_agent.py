@@ -1,4 +1,3 @@
-"""Hallucination and answer checker agent."""
 import logging
 import json
 from openai import AsyncOpenAI
@@ -30,7 +29,7 @@ Provide only the JSON object. No markdown, no explanations."""
 async def hallucination_agent(state: AgentState) -> AgentState:
     state.setdefault("agent_trace", {})
 
-    # Only run hallucination checks on RAG queries
+                                                  
     if state.get("query_type") != "rag":
         state["is_hallucination"] = False
         state["answers_question"] = True
@@ -49,7 +48,7 @@ async def hallucination_agent(state: AgentState) -> AgentState:
     retry_count = state.get("retry_count", 0)
 
     if not chunks:
-        # If there are no chunks but we generated a response, it's ungrounded (hallucination) unless the answer says "I don't know"
+                                                                                                                                   
         is_grounded = "don't know" in response.lower() or "cannot answer" in response.lower()
         state["is_hallucination"] = not is_grounded
         state["answers_question"] = False
@@ -60,7 +59,7 @@ async def hallucination_agent(state: AgentState) -> AgentState:
             state["response"] = "Tôi không tìm thấy thông tin về vấn đề này trong tài liệu."
         return state
 
-    # Build context
+                   
     context_parts = []
     for i, chunk in enumerate(chunks, 1):
         context_parts.append(f"[Source {i}]\n{chunk['content']}")
@@ -109,7 +108,7 @@ async def hallucination_agent(state: AgentState) -> AgentState:
 
     except Exception as e:
         log.error("Hallucination/Answer LLM error", extra={"error": str(e)})
-        # Default to safe path
+                              
         state["is_hallucination"] = False
         state["answers_question"] = True
         state["agent_trace"]["hallucination"] = f"error: {str(e)}"

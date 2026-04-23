@@ -5,7 +5,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
-# Load models so they register with Base.metadata
+                                                 
 from app.database import Base
 from app.models import user, email_verification, password_reset_session
 from app.models import conversation, document, document_chunk, message, user_quota

@@ -1,43 +1,42 @@
-"""Agent state — extended for Advanced RAG pipeline."""
 from typing import TypedDict
 
 
 class AgentState(TypedDict):
-    # Input
+           
     user_id:         str
     conversation_id: str
     query:           str
-    rewritten_query: str          # output of combined router
+    rewritten_query: str                                     
 
-    # Router
-    query_type:      str          # "rag" | "chitchat" | "summarize" | "clarify"
-    router_confidence: float      # confidence score from router
-    router_reasoning:  str        # reasoning string for debug/tracing
-    search_variants:   list[str]  # multi-query variants from router
+            
+    query_type:      str                                                        
+    router_confidence: float                                    
+    router_reasoning:  str                                            
+    search_variants:   list[str]                                    
 
-    # Memory
-    history:         list[dict]   # [{"role": "user"|"assistant", "content": "..."}]
+            
+    history:         list[dict]                                                     
 
-    # Retrieval (child chunks — raw from BM25 + vector)
+                                                       
     bm25_results:    list[dict]
     vector_results:  list[dict]
-    fused_chunks:    list[dict]   # RRF-merged children
+    fused_chunks:    list[dict]                        
 
-    # After parent expansion + compression + reranking
-    reranked_chunks: list[dict]   # final parent-level chunks sent to LLM
+                                                      
+    reranked_chunks: list[dict]                                          
 
-    # Answer
+            
     response:        str
     token_count:     int
-    agent_trace:     dict         # full audit trail of the pipeline
+    agent_trace:     dict                                           
 
-    # Control
+             
     error:           str | None
     should_stream:   bool
-    has_documents:   bool         # False → skip retrieval entirely
+    has_documents:   bool                                          
     document_count:  int
 
-    # Multi-Agent Evaluation state
+                                  
     context_relevant: bool
     is_hallucination: bool
     answers_question: bool

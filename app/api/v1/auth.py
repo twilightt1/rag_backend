@@ -29,20 +29,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 log    = logging.getLogger(__name__)
 
 
-# ── Register ──────────────────────────────────────────────────────────────────
+                                                                                
 @router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(
     request: Request,
     body: RegisterRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Rate limit: 5 registrations per minute per IP
+                                                   
     await check_rate_limit(f"ip:{request.client.host}", window_seconds=60, limit=5)
     await auth_service.register_email(db, body.email, body.password)
     return RegisterResponse(message="Registration successful. Check your email for a verification code.")
 
 
-# ── Email Verification — OTP ──────────────────────────────────────────────────
+                                                                                
 @router.post("/verify-email/otp", response_model=OTPVerifyResponse)
 async def verify_email_otp(body: OTPVerifyRequest, db: AsyncSession = Depends(get_db)):
     user  = await auth_service.verify_email_otp(db, body.email, body.otp_code)
@@ -53,7 +53,7 @@ async def verify_email_otp(body: OTPVerifyRequest, db: AsyncSession = Depends(ge
     return OTPVerifyResponse(message="Email verified.", access_token=token)
 
 
-# ── Email Verification — Link ─────────────────────────────────────────────────
+                                                                                
 @router.get("/verify-email/link")
 async def verify_email_link(
     token: str = Query(...),
@@ -71,14 +71,14 @@ async def verify_email_link(
     return RedirectResponse(f"{settings.FRONTEND_URL}/onboarding?token={access}")
 
 
-# ── Resend Verification ───────────────────────────────────────────────────────
+                                                                                
 @router.post("/verify-email/resend", status_code=200)
 async def resend_verification(body: ResendVerificationRequest, db: AsyncSession = Depends(get_db)):
     await auth_service.resend_verification(db, body.email)
     return {"message": "If the account exists and is unverified, a new code has been sent."}
 
 
-# ── Onboarding ────────────────────────────────────────────────────────────────
+                                                                                
 @router.post("/onboarding", response_model=OnboardingResponse)
 async def onboarding(
     body: OnboardingRequest,
@@ -93,14 +93,14 @@ async def onboarding(
     )
 
 
-# ── Login ─────────────────────────────────────────────────────────────────────
+                                                                                
 @router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     body: LoginRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    # Rate limit: 10 login attempts per minute per IP
+                                                     
     await check_rate_limit(f"ip:{request.client.host}", window_seconds=60, limit=10)
     user, access, refresh = await auth_service.login_email(db, body.email, body.password)
     return LoginResponse(
@@ -110,7 +110,7 @@ async def login(
     )
 
 
-# ── Google OAuth ──────────────────────────────────────────────────────────────
+                                                                                
 @router.get("/google/authorize")
 async def google_authorize():
     redis = await get_redis()
@@ -157,7 +157,7 @@ async def google_callback(
     return RedirectResponse(f"{settings.FRONTEND_URL}{dest}?token={access}&refresh={refresh}")
 
 
-# ── Token Refresh ─────────────────────────────────────────────────────────────
+                                                                                
 @router.post("/refresh")
 async def refresh_token(refresh_token: str):
     redis     = await get_redis()
@@ -182,7 +182,7 @@ async def refresh_token(refresh_token: str):
     return {"access_token": new_access, "refresh_token": new_refresh, "token_type": "bearer"}
 
 
-# ── Logout ────────────────────────────────────────────────────────────────────
+                                                                                
 @router.post("/logout", status_code=200)
 async def logout(
     request: Request,
@@ -193,7 +193,7 @@ async def logout(
     if refresh_token:
         await redis.delete(f"refresh:{refresh_token}")
 
-    # Blacklist the current access token
+                                        
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
@@ -201,8 +201,8 @@ async def logout(
             payload = decode_access_token(token)
             jti = payload.get("jti")
             if jti:
-                # Add to blacklist with TTL matching standard expiration
-                # Using 1 hour (3600s) to be safe since ACCESS_TOKEN_EXPIRE_MINUTES is usually 15-30m
+                                                                        
+                                                                                                     
                 exp_seconds = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60 if hasattr(settings, 'ACCESS_TOKEN_EXPIRE_MINUTES') else 3600
                 await redis.setex(f"blacklist:{jti}", exp_seconds, "1")
         except Exception as e:
@@ -211,7 +211,7 @@ async def logout(
     return {"message": "Logged out successfully."}
 
 
-# ── Forgot Password ───────────────────────────────────────────────────────────
+                                                                                
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
 async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     await auth_service.create_password_reset_session(db, body.email)

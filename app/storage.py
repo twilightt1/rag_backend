@@ -89,7 +89,7 @@ async def list_objects(prefix: str) -> list[str]:
     return await loop.run_in_executor(None, _list)
 
 
-# Sync versions for Celery tasks
+                                
 def get_object_sync(object_name: str) -> bytes:
     client   = _get_client()
     response = client.get_object(settings.MINIO_BUCKET, object_name)

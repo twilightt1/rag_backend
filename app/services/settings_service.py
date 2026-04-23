@@ -9,9 +9,9 @@ from app.redis_client import get_redis
 
 class SettingsService:
     CACHE_PREFIX = "sys_setting:"
-    CACHE_TTL = 300  # 5 minutes
+    CACHE_TTL = 300             
 
-    # Hardcoded defaults fallback
+                                 
     DEFAULTS = {
         "default_user_daily_limit": {"value": 50, "description": "Default daily request limit for new users"},
         "default_user_monthly_limit": {"value": 1000, "description": "Default monthly request limit for new users"},
@@ -26,23 +26,23 @@ class SettingsService:
         redis: Redis = await get_redis()
         cache_key = f"{cls.CACHE_PREFIX}{key}"
 
-        # 1. Check Cache
+                        
         cached_value = await redis.get(cache_key)
         if cached_value:
             return json.loads(cached_value)
 
-        # 2. Check Database
+                           
         db_setting = await db.scalar(select(SystemSetting).where(SystemSetting.key == key))
         if db_setting:
             val = db_setting.value
-            # Cache it
+                      
             await redis.setex(cache_key, cls.CACHE_TTL, json.dumps(val))
             return val
 
-        # 3. Fallback to hardcoded default
+                                          
         if key in cls.DEFAULTS:
             default_val = cls.DEFAULTS[key]["value"]
-            # Cache the default too so we don't hammer the DB for non-existent settings
+                                                                                       
             await redis.setex(cache_key, cls.CACHE_TTL, json.dumps(default_val))
             return default_val
 
@@ -70,9 +70,9 @@ class SettingsService:
             )
             db.add(db_setting)
 
-        # We leave committing to the route handler
+                                                  
 
-        # Invalidate cache
+                          
         redis: Redis = await get_redis()
         cache_key = f"{cls.CACHE_PREFIX}{key}"
         await redis.delete(cache_key)
@@ -88,7 +88,7 @@ class SettingsService:
         if db_setting:
             await db.delete(db_setting)
 
-            # Invalidate cache
+                              
             redis: Redis = await get_redis()
             cache_key = f"{cls.CACHE_PREFIX}{key}"
             await redis.delete(cache_key)

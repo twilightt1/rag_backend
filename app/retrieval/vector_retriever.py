@@ -1,12 +1,3 @@
-"""
-ChromaDB vector retriever — conversation-scoped, child-chunk indexed.
-
-Collection: rag_conv_{conversation_id}
-Only CHILD chunks are stored (small, 300 chars).
-Parent content is resolved via parent_store after retrieval.
-
-HyDE support: caller passes hyde_text instead of the raw query for embedding.
-"""
 from __future__ import annotations
 import logging
 import chromadb
@@ -23,7 +14,6 @@ _sync_client: chromadb.HttpClient | None = None
 
 
 def with_retry(retries: int = 3, base_delay: float = 1.0):
-    """Simple exponential backoff retry decorator for ChromaDB connections."""
     def decorator(func: Callable):
         if asyncio.iscoroutinefunction(func):
             async def async_wrapper(*args, **kwargs):
@@ -33,7 +23,7 @@ def with_retry(retries: int = 3, base_delay: float = 1.0):
                         return await func(*args, **kwargs)
                     except (ValueError, httpx.ConnectError, httpx.HTTPError, Exception) as e:
                         last_exc = e
-                        # Retry on connection errors or ValueErrors (ChromaDB's custom connection error)
+                                                                                                        
                         if any(msg in str(e) for msg in ["Could not connect", "connection", "Refused"]) or \
                            isinstance(e, (ValueError, httpx.ConnectError)):
                             delay = base_delay * (2 ** i)
@@ -91,13 +81,9 @@ def _col_name(conversation_id: str) -> str:
     return f"rag_conv_{conversation_id}"
 
 
-# ── Upsert (ingestion) ────────────────────────────────────────────────────────
+                                                                                
 
 async def upsert_chunks(conversation_id: str, chunks: list[dict]) -> None:
-    """
-    Upsert child chunks.
-    chunks: [{ id, content, metadata }]
-    """
     if not chunks:
         return
     cli        = await _get_async_client()
@@ -116,7 +102,6 @@ async def upsert_chunks(conversation_id: str, chunks: list[dict]) -> None:
 
 
 def upsert_chunks_sync(conversation_id: str, chunks: list[dict]) -> None:
-    """Sync for Celery."""
     if not chunks:
         return
     cli        = _get_sync_client()
@@ -133,7 +118,7 @@ def upsert_chunks_sync(conversation_id: str, chunks: list[dict]) -> None:
     )
 
 
-# ── Search ────────────────────────────────────────────────────────────────────
+                                                                                
 
 async def search(
     query: str,
@@ -141,10 +126,6 @@ async def search(
     conversation_id: str,
     hyde_text: str | None = None,
 ) -> list[dict]:
-    """
-    Search child chunks. If hyde_text is provided, embed that instead of query.
-    Returns list of child chunk dicts with content + metadata.
-    """
     try:
         cli        = await _get_async_client()
         collection = await cli.get_collection(_col_name(conversation_id))
@@ -155,11 +136,11 @@ async def search(
     if count == 0:
         return []
 
-    # Embed hyde_text for retrieval, but keep original query in metadata
+                                                                        
     embed_input = hyde_text if hyde_text else query
     embedding   = await embed_query(embed_input)
 
-    # Use await for AsyncCollection methods
+                                           
     results = await collection.query(
         query_embeddings=[embedding],
         n_results=min(top_k, count),
@@ -186,7 +167,7 @@ async def search(
     ]
 
 
-# ── Cleanup ───────────────────────────────────────────────────────────────────
+                                                                                
 
 async def delete_document_chunks(conversation_id: str, document_id: str) -> None:
     try:

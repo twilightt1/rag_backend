@@ -1,4 +1,3 @@
-"""Jina Reranker API."""
 import logging
 import httpx
 from app.config import settings
@@ -6,7 +5,7 @@ from app.config import settings
 log = logging.getLogger(__name__)
 JINA_URL = "https://api.jina.ai/v1/rerank"
 
-# Global client for connection pooling
+                                      
 _client: httpx.AsyncClient | None = None
 
 def get_jina_client() -> httpx.AsyncClient:
@@ -16,7 +15,6 @@ def get_jina_client() -> httpx.AsyncClient:
     return _client
 
 async def rerank(query: str, chunks: list[dict]) -> list[dict]:
-    """Rerank chunks via Jina API. Returns top-N sorted by relevance."""
     if not chunks:
         return []
 

@@ -15,7 +15,7 @@ ALLOWED_MIME = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
 }
-MAX_SIZE = 50 * 1024 * 1024   # 50 MB
+MAX_SIZE = 50 * 1024 * 1024          
 MAX_DOCS = 20
 
 
@@ -81,20 +81,20 @@ async def delete_document(db: AsyncSession, document: Document, conversation: Co
     from app.retrieval.vector_retriever import delete_document_chunks
     from app.retrieval.bm25_retriever import bm25_retriever
 
-    # 1. MinIO
+              
     try:
         await storage.remove_object(document.file_path)
     except Exception as e:
         log.warning("MinIO delete failed", extra={"error": str(e)})
 
-    # 2. ChromaDB
+                 
     await delete_document_chunks(str(conversation.id), str(document.id))
 
-    # 3. DB (CASCADE removes chunks)
+                                    
     await db.delete(document)
     conversation.document_count = max(0, conversation.document_count - 1)
     await db.commit()
 
-    # 4. Rebuild BM25
+                     
     await bm25_retriever.rebuild_async(db, str(conversation.id))
     log.info("Document deleted", extra={"doc_id": str(document.id)})

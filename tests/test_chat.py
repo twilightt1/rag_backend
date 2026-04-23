@@ -1,4 +1,3 @@
-"""Chat endpoint tests (minimal)."""
 import pytest
 from httpx import AsyncClient
 

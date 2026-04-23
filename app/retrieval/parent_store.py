@@ -1,21 +1,10 @@
-"""
-Parent chunk store — Redis-backed lookup.
-
-During ingestion, parent chunks are cached in Redis.
-During retrieval, after getting child chunk IDs from ChromaDB,
-we look up their parent content from this store.
-
-Key format : parent_chunk:{conversation_id}:{parent_id}
-TTL        : 2 hours (refreshed on access)
-Fallback   : PostgreSQL document_chunks table
-"""
 from __future__ import annotations
 import json
 import logging
 from app.redis_client import get_redis
 
 log = logging.getLogger(__name__)
-TTL = 7200  # 2 hours
+TTL = 7200           
 
 
 def _key(conversation_id: str, parent_id: str) -> str:
@@ -23,10 +12,6 @@ def _key(conversation_id: str, parent_id: str) -> str:
 
 
 async def store_parents(conversation_id: str, parents: list[dict]) -> None:
-    """
-    Cache parent chunks in Redis.
-    parents: [{ id, content, metadata }]
-    """
     redis = await get_redis()
     pipe  = redis.pipeline()
     for p in parents:
@@ -36,17 +21,14 @@ async def store_parents(conversation_id: str, parents: list[dict]) -> None:
 
 
 async def get_parent(conversation_id: str, parent_id: str, db=None) -> dict | None:
-    """
-    Retrieve a parent chunk. Redis first, DB fallback.
-    """
     redis  = await get_redis()
     cached = await redis.get(_key(conversation_id, parent_id))
 
     if cached:
-        await redis.expire(_key(conversation_id, parent_id), TTL)  # refresh TTL
+        await redis.expire(_key(conversation_id, parent_id), TTL)               
         return json.loads(cached)
 
-    # DB fallback
+                 
     if db is not None:
         return await _load_from_db(db, parent_id, conversation_id)
 
@@ -58,9 +40,6 @@ async def get_parents_batch(
     parent_ids: list[str],
     db=None,
 ) -> dict[str, dict]:
-    """
-    Batch-fetch parents. Returns { parent_id: parent_dict }.
-    """
     if not parent_ids:
         return {}
 
@@ -76,19 +55,19 @@ async def get_parents_batch(
         else:
             missing.append(pid)
 
-    # Refresh TTL for found keys
+                                
     if result:
         pipe = redis.pipeline()
         for pid in result:
             pipe.expire(_key(conversation_id, pid), TTL)
         await pipe.execute()
 
-    # Fetch missing from DB
+                           
     if missing and db is not None:
         db_parents = await _load_batch_from_db(db, missing, conversation_id)
         result.update(db_parents)
 
-        # Cache newly loaded parents
+                                    
         if db_parents:
             pipe = redis.pipeline()
             for pid, p in db_parents.items():
@@ -99,7 +78,6 @@ async def get_parents_batch(
 
 
 async def invalidate_conversation(conversation_id: str) -> None:
-    """Delete all parent cache for a conversation."""
     redis  = await get_redis()
     cursor = 0
     while True:
@@ -112,7 +90,7 @@ async def invalidate_conversation(conversation_id: str) -> None:
             break
 
 
-# ── DB fallback helpers ───────────────────────────────────────────────────────
+                                                                                
 
 async def _load_from_db(db, parent_id: str, conversation_id: str) -> dict | None:
     from sqlalchemy import select
@@ -152,10 +130,9 @@ async def _load_batch_from_db(
     }
 
 
-# ── Sync versions for Celery ──────────────────────────────────────────────────
+                                                                                
 
 def store_parents_sync(conversation_id: str, parents: list[dict]) -> None:
-    """Sync Redis store for Celery ingestion task."""
     import redis as redis_lib
     from app.config import settings
 

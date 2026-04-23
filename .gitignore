@@ -22,3 +22,5 @@ chroma/
 chromadata/
 .ruff_cache/
 tests/
+.mypy_cache/
+.coverage

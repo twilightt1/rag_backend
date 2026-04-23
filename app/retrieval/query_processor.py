@@ -1,23 +1,3 @@
-"""
-Query processor — runs before retrieval.
-
-Four transformations (all use OpenRouter LLM):
-
-1. conversation_rewrite  — turn conversational follow-up into standalone query
-   "What about its memory?" + history → "How does Transformer handle memory?"
-
-2. query_rewrite         — paraphrase for lexical diversity
-   → one alternative phrasing of the same question
-
-3. multi_query           — generate N semantically varied queries
-   → retrieves wider coverage, merged via RRF
-
-4. hyde                  — Hypothetical Document Embeddings
-   → generate a fake answer, embed it, use for vector search
-   (better signal than embedding the question alone)
-
-The caller decides which to use. retrieval_agent uses all four in parallel.
-"""
 from __future__ import annotations
 import asyncio
 import json
@@ -41,7 +21,6 @@ def _llm() -> AsyncOpenAI:
 
 
 async def _call(system: str, user: str, max_tokens: int = 512) -> str:
-    """Single LLM call — returns text content."""
     try:
         resp = await _llm().chat.completions.create(
             model=settings.LLM_MODEL,
@@ -62,7 +41,7 @@ async def _call(system: str, user: str, max_tokens: int = 512) -> str:
         return ""
 
 
-# ── 1. Conversation-aware rewrite ─────────────────────────────────────────────
+                                                                                
 
 CONV_SYSTEM = """You are a query reformulation assistant.
 Given a conversation history and a follow-up question, rewrite the follow-up
@@ -75,14 +54,10 @@ Rules:
 
 
 async def conversation_rewrite(query: str, history: list[dict]) -> str:
-    """
-    Rewrite follow-up query into standalone query using conversation history.
-    history: [{"role": "user"|"assistant", "content": "..."}]
-    """
     if not history:
         return query
 
-    # Limit to last 6 turns to keep prompt small
+                                                
     recent = history[-6:]
     hist_text = "\n".join(
         f"{m['role'].upper()}: {m['content']}" for m in recent
@@ -92,7 +67,7 @@ async def conversation_rewrite(query: str, history: list[dict]) -> str:
     return result or query
 
 
-# ── 2. Query rewrite (paraphrase) ─────────────────────────────────────────────
+                                                                                
 
 REWRITE_SYSTEM = """You are a query rewriting assistant.
 Rewrite the given search query to improve retrieval accuracy.
@@ -101,12 +76,11 @@ Return ONLY the rewritten query. No explanation."""
 
 
 async def query_rewrite(query: str) -> str:
-    """Paraphrase query for lexical diversity."""
     result = await _call(REWRITE_SYSTEM, query, max_tokens=150)
     return result or query
 
 
-# ── 3. Multi-query generation ─────────────────────────────────────────────────
+                                                                                
 
 MULTI_QUERY_SYSTEM = """You are a query expansion assistant.
 Generate {n} distinct search queries that approach the user's question from
@@ -118,27 +92,23 @@ Output a JSON array of strings and nothing else. Example:
 
 
 async def multi_query(query: str, n: int = 3) -> list[str]:
-    """
-    Generate N query variants for broader retrieval coverage.
-    Returns original query + variants (deduped).
-    """
     system = MULTI_QUERY_SYSTEM.format(n=n)
     raw    = await _call(system, query, max_tokens=300)
 
     variants: list[str] = []
     try:
-        # Try to parse JSON array
+                                 
         parsed = json.loads(raw)
         if isinstance(parsed, list):
             variants = [str(v).strip() for v in parsed if str(v).strip()]
     except (json.JSONDecodeError, ValueError):
-        # Fallback: parse line by line
+                                      
         for line in raw.splitlines():
             line = line.strip().strip('"').strip("'").strip("-").strip()
             if line and len(line) > 5:
                 variants.append(line)
 
-    # Deduplicate and limit, always include original
+                                                    
     all_queries = [query] + variants
     seen        = set()
     result      = []
@@ -152,7 +122,7 @@ async def multi_query(query: str, n: int = 3) -> list[str]:
     return result or [query]
 
 
-# ── 4. HyDE — Hypothetical Document Embedding ─────────────────────────────────
+                                                                                
 
 HYDE_SYSTEM = """You are a knowledgeable assistant.
 Write a short, factual passage (2-4 sentences) that would directly answer
@@ -162,16 +132,11 @@ Return ONLY the passage text."""
 
 
 async def hyde(query: str) -> str:
-    """
-    Generate a hypothetical document passage to embed for retrieval.
-    The embedding of this passage is often closer to relevant real chunks
-    than embedding the question alone.
-    """
     result = await _call(HYDE_SYSTEM, query, max_tokens=200)
     return result or query
 
 
-# ── Combined: run all transforms in parallel ──────────────────────────────────
+                                                                                
 
 async def process_query(
     query: str,
@@ -181,14 +146,10 @@ async def process_query(
     use_hyde:        bool = True,
     n_variants:      int  = 3,
 ) -> "QueryBundle":
-    """
-    Run all query transforms in parallel.
-    Returns a QueryBundle with all variants ready for retrieval.
-    """
-    # Step 1: Conversation rewrite (sequential — others depend on this)
+                                                                       
     standalone = await conversation_rewrite(query, history)
 
-    # Step 2: Remaining transforms in parallel
+                                              
     tasks = {}
     if use_rewrite:
         tasks["rewrite"]     = query_rewrite(standalone)
@@ -229,10 +190,9 @@ async def process_query(
     )
 
 
-# ── QueryBundle ───────────────────────────────────────────────────────────────
+                                                                                
 
 class QueryBundle:
-    """Container for all query variants produced by process_query()."""
 
     def __init__(
         self,
@@ -245,11 +205,10 @@ class QueryBundle:
         self.original   = original
         self.standalone = standalone
         self.rewritten  = rewritten
-        self.variants   = variants    # includes standalone as first element
+        self.variants   = variants                                          
         self.hyde_text  = hyde_text
 
     def all_queries(self) -> list[str]:
-        """All unique query strings to use for retrieval."""
         all_q = [self.standalone, self.rewritten] + self.variants
         seen, result = set(), []
         for q in all_q:

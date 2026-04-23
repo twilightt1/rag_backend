@@ -38,7 +38,7 @@ class ChildChunk:
     metadata:  dict = field(default_factory=dict)
 
 
-# ── Text extraction ───────────────────────────────────────────────────────────
+                                                                                
 
 def extract_text(file_bytes: bytes, mime_type: str | None) -> str:
     mime = (mime_type or "").lower()
@@ -79,11 +79,11 @@ def _extract_docx(data: bytes) -> str:
     return "\n\n".join(lines)
 
 
-# ── Splitting helpers ─────────────────────────────────────────────────────────
+                                                                                
 
 def _recursive_split(text: str, size: int, overlap: int) -> list[str]:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
-    # Use regex-based sentence splitting for better semantic chunking
+                                                                     
     sp = RecursiveCharacterTextSplitter(
         chunk_size=size,
         chunk_overlap=overlap,
@@ -111,7 +111,7 @@ def _split_parents(text: str) -> list[str]:
     return _recursive_split(text, PARENT_SIZE, PARENT_OVERLAP)
 
 
-# ── Main pipeline ─────────────────────────────────────────────────────────────
+                                                                                
 
 def build_parent_child_chunks(
     text: str,

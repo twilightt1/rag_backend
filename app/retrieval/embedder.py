@@ -1,39 +1,31 @@
-"""OpenAI embeddings client."""
 import logging
-import httpx
+from openai import AsyncOpenAI, OpenAI
 from app.config import settings
 
 log = logging.getLogger(__name__)
+
+async_client = AsyncOpenAI(
+    api_key=settings.OPENAI_API_KEY
+)
+
+sync_client = OpenAI(
+    api_key=settings.OPENAI_API_KEY
+)
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    headers = {
-        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": settings.FRONTEND_URL,
-    }
-
-    payload = {
-        "model": settings.EMBED_MODEL,
-        "input": texts,
-    }
-
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{settings.OPENROUTER_BASE_URL}/embeddings",
-            headers=headers,
-            json=payload,
+    try:
+        response = await async_client.embeddings.create(
+            model=settings.EMBED_MODEL,
+            input=texts,
             timeout=30.0
         )
-        response.raise_for_status()
-        data = response.json()
-        if "data" not in data or not data["data"]:
-            log.error("No embedding data received", extra={"response": data})
-            raise ValueError("No embedding data received from API")
-
-        return [item["embedding"] for item in data["data"]]
+        return [item.embedding for item in response.data]
+    except Exception as e:
+        log.error("Failed to get embeddings", exc_info=True)
+        raise ValueError(f"Failed to get embeddings: {e}")
 
 
 async def embed_query(query: str) -> list[float]:
@@ -41,32 +33,16 @@ async def embed_query(query: str) -> list[float]:
 
 
 def embed_texts_sync(texts: list[str]) -> list[list[float]]:
-    """Sync version for Celery tasks."""
     if not texts:
         return []
 
-    headers = {
-        "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": settings.FRONTEND_URL,
-    }
-
-    payload = {
-        "model": settings.EMBED_MODEL,
-        "input": texts,
-    }
-
-    with httpx.Client() as client:
-        response = client.post(
-            f"{settings.OPENROUTER_BASE_URL}/embeddings",
-            headers=headers,
-            json=payload,
+    try:
+        response = sync_client.embeddings.create(
+            model=settings.EMBED_MODEL,
+            input=texts,
             timeout=30.0
         )
-        response.raise_for_status()
-        data = response.json()
-        if "data" not in data or not data["data"]:
-            log.error("No embedding data received", extra={"response": data})
-            raise ValueError("No embedding data received from API")
-
-        return [item["embedding"] for item in data["data"]]
+        return [item.embedding for item in response.data]
+    except Exception as e:
+        log.error("Failed to get embeddings (sync)", exc_info=True)
+        raise ValueError(f"Failed to get embeddings: {e}")

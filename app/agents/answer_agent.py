@@ -1,4 +1,3 @@
-"""Answer agent — streams response from OpenRouter LLM."""
 import logging
 from openai import AsyncOpenAI
 from app.agents.state import AgentState
@@ -35,7 +34,7 @@ Format example:
 async def answer_agent(state: AgentState) -> AgentState:
     state.setdefault("agent_trace", {})
 
-    # Build context from reranked chunks
+                                        
     if state.get("query_type") == "summarize" and state.get("reranked_chunks"):
         context_parts = []
         for i, chunk in enumerate(state["reranked_chunks"], 1):
@@ -77,7 +76,7 @@ async def answer_agent(state: AgentState) -> AgentState:
         async for chunk in stream:
             delta = chunk.choices[0].delta.content or ""
             full_response += delta
-            # Yield chunk for SSE — stored in state for non-streaming callers
+                                                                             
             cb = state.get("_stream_callback")
             if cb:
                 await cb(delta)

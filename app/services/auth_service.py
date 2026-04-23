@@ -20,7 +20,7 @@ log     = logging.getLogger(__name__)
 OTP_MAX = 5
 _now    = lambda: datetime.now(timezone.utc)
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+                                                                                
 def _hash(pw: str) -> str:
     pw_bytes = pw.encode('utf-8')
     if len(pw_bytes) > 72:
@@ -38,7 +38,7 @@ def _verify(pw: str, h: str) -> bool:
 def _otp() -> str:                    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
-# ── Register ──────────────────────────────────────────────────────────────────
+                                                                                
 async def register_email(db: AsyncSession, email: str, password: str) -> User:
     from fastapi import HTTPException
     existing = await db.scalar(select(User).where(User.email == email))
@@ -59,7 +59,7 @@ async def register_email(db: AsyncSession, email: str, password: str) -> User:
         otp_code=otp, otp_attempts=0,
         expires_at=_now() + timedelta(hours=24),
     ))
-    # Create quota record
+                         
     from app.models.user_quota import UserQuota
     db.add(UserQuota(user_id=user.id))
     await db.commit()
@@ -70,7 +70,7 @@ async def register_email(db: AsyncSession, email: str, password: str) -> User:
     return user
 
 
-# ── OTP Verify ────────────────────────────────────────────────────────────────
+                                                                                
 async def verify_email_otp(db: AsyncSession, email: str, otp_code: str) -> User:
     from fastapi import HTTPException
     user = await db.scalar(select(User).where(User.email == email))
@@ -100,7 +100,7 @@ async def verify_email_otp(db: AsyncSession, email: str, otp_code: str) -> User:
     return user
 
 
-# ── Link Verify ───────────────────────────────────────────────────────────────
+                                                                                
 async def verify_email_link(db: AsyncSession, token: str) -> User:
     from fastapi import HTTPException
     ev = await db.scalar(
@@ -123,7 +123,7 @@ async def verify_email_link(db: AsyncSession, token: str) -> User:
     return user
 
 
-# ── Resend ────────────────────────────────────────────────────────────────────
+                                                                                
 async def resend_verification(db: AsyncSession, email: str) -> None:
     from fastapi import HTTPException
     redis = await get_redis()
@@ -134,7 +134,7 @@ async def resend_verification(db: AsyncSession, email: str) -> None:
 
     user = await db.scalar(select(User).where(User.email == email))
     if not user or user.is_verified:
-        return  # silent
+        return          
 
     await db.execute(
         update(EmailVerification)
@@ -154,7 +154,7 @@ async def resend_verification(db: AsyncSession, email: str) -> None:
     send_verification_email.delay(email, otp, token)
 
 
-# ── Onboarding ────────────────────────────────────────────────────────────────
+                                                                                
 async def complete_onboarding(db: AsyncSession, user: User, display_name: str) -> tuple[User, str, str]:
     from fastapi import HTTPException
     if not user.is_verified:
@@ -168,7 +168,7 @@ async def complete_onboarding(db: AsyncSession, user: User, display_name: str) -
     return user, access, refresh
 
 
-# ── Login ─────────────────────────────────────────────────────────────────────
+                                                                                
 async def login_email(db: AsyncSession, email: str, password: str) -> tuple[User, str, str]:
     from fastapi import HTTPException
     user = await db.scalar(select(User).where(User.email == email))
@@ -185,12 +185,12 @@ async def login_email(db: AsyncSession, email: str, password: str) -> tuple[User
     return user, access, refresh
 
 
-# ── Google OAuth ──────────────────────────────────────────────────────────────
+                                                                                
 async def find_or_create_google_user(db: AsyncSession, info: dict) -> User:
     from fastapi import HTTPException
     sub, email, picture = info["sub"], info["email"], info.get("picture")
 
-    # Already linked Google account
+                                   
     user = await db.scalar(select(User).where(User.google_id == sub))
     if user:
         if picture and user.avatar_url != picture:
@@ -198,7 +198,7 @@ async def find_or_create_google_user(db: AsyncSession, info: dict) -> User:
             await db.commit()
         return user
 
-    # Email already exists with password auth
+                                             
     existing = await db.scalar(select(User).where(User.email == email))
     if existing:
         if existing.auth_provider == "email":
@@ -208,7 +208,7 @@ async def find_or_create_google_user(db: AsyncSession, info: dict) -> User:
         await db.commit()
         return existing
 
-    # New Google user
+                     
     from app.models.user_quota import UserQuota
     user = User(
         email=email, auth_provider="google", google_id=sub,
@@ -224,7 +224,7 @@ async def find_or_create_google_user(db: AsyncSession, info: dict) -> User:
     return user
 
 
-# ── Forgot Password ───────────────────────────────────────────────────────────
+                                                                                
 async def create_password_reset_session(db: AsyncSession, email: str) -> None:
     from fastapi import HTTPException
     redis = await get_redis()
@@ -237,7 +237,7 @@ async def create_password_reset_session(db: AsyncSession, email: str) -> None:
         select(User).where(and_(User.email == email, User.auth_provider == "email"))
     )
     if not user or not user.is_active:
-        return  # silent — prevent email enumeration
+        return                                      
 
     await db.execute(
         update(PasswordResetSession)
@@ -324,7 +324,7 @@ async def reset_password(db: AsyncSession, token: str, new_password: str) -> Non
     log.info("Password reset", extra={"user_id": str(user.id)})
 
 
-# ── Profile ───────────────────────────────────────────────────────────────────
+                                                                                
 async def update_display_name(db: AsyncSession, user: User, display_name: str) -> User:
     user.display_name = display_name
     await db.commit()
@@ -344,7 +344,7 @@ async def change_password(db: AsyncSession, user: User, current: str, new_pw: st
     log.info("Password changed", extra={"user_id": str(user.id)})
 
 
-# ── Token helpers ─────────────────────────────────────────────────────────────
+                                                                                
 async def _create_refresh(user_id: UUID | str) -> str:
     redis = await get_redis()
     token = secrets.token_urlsafe(64)

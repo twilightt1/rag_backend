@@ -274,7 +274,7 @@ async def retry_document(
     )
 
     await db.commit()
-    # In a real system, you might enqueue a Celery task here to process the document
+                                                                                    
     return {"message": "Document marked for retry."}
 
 
@@ -288,14 +288,14 @@ async def delete_document(
     if not doc:
         raise HTTPException(404, detail="Document not found.")
 
-    # Hard delete for documents, as they are typically deleted entirely
-    # Alternatively, you could soft-delete or just remove from MinIO/Chroma
+                                                                       
+                                                                           
 
     changes = {
         "status": {"old": doc.status, "new": "deleted"}
     }
 
-    # Store filename before deletion for the log
+                                                
     filename = doc.filename
 
     await AuditService.log_action(

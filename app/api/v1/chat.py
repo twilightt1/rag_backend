@@ -31,7 +31,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 log    = logging.getLogger(__name__)
 
 
-# ── Guard ─────────────────────────────────────────────────────────────────────
+                                                                                
 async def _get_conversation(
     conversation_id: UUID,
     current_user=Depends(get_current_active_user),
@@ -48,7 +48,7 @@ async def _get_conversation(
     return conv
 
 
-# ── Conversations CRUD ────────────────────────────────────────────────────────
+                                                                                
 @router.get("/conversations", response_model=list[ConversationResponse])
 async def list_conversations(
     current_user=Depends(get_current_active_user),
@@ -121,7 +121,7 @@ async def delete_conversation(
     bm25_retriever.invalidate(conv_id)
 
 
-# ── Messages ──────────────────────────────────────────────────────────────────
+                                                                                
 @router.get(
     "/conversations/{conversation_id}/messages",
     response_model=list[MessageResponse],
@@ -138,7 +138,7 @@ async def list_messages(
     return result.scalars().all()
 
 
-# ── Chat — SSE Streaming ──────────────────────────────────────────────────────
+                                                                                
 @router.post("/conversations/{conversation_id}/message")
 async def send_message(
     body: ChatRequest,
@@ -146,7 +146,7 @@ async def send_message(
     current_user=Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Rate limit + quota
+                        
     await check_rate_limit(str(current_user.id), window_seconds=60, limit=settings.RATE_LIMIT_PER_MINUTE)
     await check_and_increment(current_user.id, db)
 
@@ -170,7 +170,7 @@ async def send_message(
     )
 
     async def event_stream():
-        # Buffer to accumulate streamed text
+                                            
         buffer: list[str] = []
 
         try:
@@ -179,7 +179,7 @@ async def send_message(
                 data = event[node]
 
                 if node == "save":
-                    # Yield the response only after hallucination checks are complete
+                                                                                     
                     current_response = data.get("response", "")
                     yield f"data: {json.dumps({'type': 'chunk', 'content': current_response})}\n\n"
 
@@ -204,7 +204,7 @@ async def send_message(
     )
 
 
-# ── Documents (nested) ────────────────────────────────────────────────────────
+                                                                                
 @router.get(
     "/conversations/{conversation_id}/documents",
     response_model=list[DocumentResponse],

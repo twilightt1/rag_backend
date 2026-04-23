@@ -7,7 +7,7 @@ def reciprocal_rank_fusion(result_lists: list[list[dict]], k: int = 60) -> list[
     content_map: dict[str, dict]  = {}
     for results in result_lists:
         for rank, item in enumerate(results):
-            # Prefer parent_id to fuse child and parent chunks pointing to the same document
+                                                                                            
             doc_id = item.get("parent_id") or item.get("metadata", {}).get("parent_id")
             if not doc_id:
                 doc_id = hashlib.md5(item["content"].encode()).hexdigest()

@@ -51,8 +51,8 @@ async def get_setting(
     if val is None:
         raise HTTPException(404, detail="Setting not found.")
 
-    # We don't have the description easily accessible if it fell back to default
-    # So we'll try to find it in the DB, or use the default description
+                                                                                
+                                                                       
     description = None
     if key in SettingsService.DEFAULTS:
         description = SettingsService.DEFAULTS[key].get("description")
@@ -121,7 +121,7 @@ async def delete_setting(
         admin_id=admin_user.id,
         action="delete_setting",
         target_entity_type="system_setting",
-        target_entity_id=admin_user.id, # We don't have the setting ID anymore, use admin ID as fallback
+        target_entity_id=admin_user.id,                                                                 
         changes={"key": key}
     )
 

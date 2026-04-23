@@ -21,16 +21,16 @@ from app.config import settings
 log = logging.getLogger(__name__)
 
 JINA_URL    = "https://api.jina.ai/v1/rerank"
-MIN_SCORE   = 0.1    # sentences below this score are dropped
-MIN_LENGTH  = 150    # chunks shorter than this skip compression
+MIN_SCORE   = 0.1                                            
+MIN_LENGTH  = 150                                               
 MAX_SENTENCES_PER_CHUNK = 20
 
 
 def _split_sentences(text: str) -> list[str]:
     """Simple sentence splitter — handles English and Vietnamese."""
-    # Split on . ! ? followed by space or newline
+                                                 
     sents = re.split(r"(?<=[.!?])\s+", text.strip())
-    # Also split on newlines (for bullet points / paragraphs)
+                                                             
     result = []
     for s in sents:
         parts = [p.strip() for p in s.split("\n") if p.strip()]
@@ -50,7 +50,7 @@ async def compress_chunk(query: str, chunk_content: str) -> str:
     if len(sentences) <= 2:
         return chunk_content
 
-    # Limit to avoid huge API calls
+                                   
     sentences = sentences[:MAX_SENTENCES_PER_CHUNK]
 
     try:
@@ -58,12 +58,12 @@ async def compress_chunk(query: str, chunk_content: str) -> str:
         kept   = [s for s, score in zip(sentences, scores) if score >= MIN_SCORE]
 
         if not kept:
-            # If everything got filtered, keep top 2
+                                                    
             ranked = sorted(zip(sentences, scores), key=lambda x: x[1], reverse=True)
             kept   = [s for s, _ in ranked[:2]]
 
         compressed = " ".join(kept)
-        # Only use compression if it's meaningfully shorter
+                                                           
         if len(compressed) < len(chunk_content) * 0.85:
             return compressed
         return chunk_content
@@ -74,10 +74,6 @@ async def compress_chunk(query: str, chunk_content: str) -> str:
 
 
 async def compress_chunks(query: str, chunks: list[dict]) -> list[dict]:
-    """
-    Compress a list of chunk dicts in parallel.
-    Each dict must have a "content" key. Returns new list with compressed content.
-    """
     import asyncio
 
     async def _compress_one(chunk: dict) -> dict:
@@ -87,10 +83,9 @@ async def compress_chunks(query: str, chunks: list[dict]) -> list[dict]:
     return list(await asyncio.gather(*[_compress_one(c) for c in chunks]))
 
 
-# ── Jina scoring ─────────────────────────────────────────────────────────────
+                                                                               
 
 async def _score_sentences(query: str, sentences: list[str]) -> list[float]:
-    """Score each sentence against the query using Jina Reranker."""
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(
             JINA_URL,
@@ -108,7 +103,7 @@ async def _score_sentences(query: str, sentences: list[str]) -> list[float]:
         resp.raise_for_status()
         data = resp.json()
 
-    # Build score list aligned with input sentences
+                                                   
     scores = [0.0] * len(sentences)
     for item in data.get("results", []):
         idx = item.get("index", -1)
