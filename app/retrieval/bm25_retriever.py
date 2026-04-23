@@ -30,7 +30,10 @@ class BM25Retriever:
         import re
 
         def tokenize(text: str) -> list[str]:
-            return re.findall(r'\w+', text.lower())
+            # Generate unigrams and bigrams to better support Vietnamese compound words
+            words = re.findall(r'\w+', text.lower())
+            bigrams = [f"{words[i]}_{words[i+1]}" for i in range(len(words)-1)]
+            return words + bigrams
 
         tokenized = [tokenize(p["content"]) for p in parents]
         self._indexes[conversation_id] = (BM25Okapi(tokenized), parents)
@@ -98,7 +101,9 @@ class BM25Retriever:
 
         index, chunks = loaded
         import re
-        query_tokens = re.findall(r'\w+', query.lower())
+        words = re.findall(r'\w+', query.lower())
+        bigrams = [f"{words[i]}_{words[i+1]}" for i in range(len(words)-1)]
+        query_tokens = words + bigrams
         scores = index.get_scores(query_tokens)
         top_n  = np.argsort(scores)[::-1][:top_k]
 

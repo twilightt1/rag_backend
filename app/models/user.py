@@ -20,6 +20,7 @@ class User(Base):
     role:            Mapped[str]       = mapped_column(String(20), server_default="user")
     is_verified:     Mapped[bool]      = mapped_column(Boolean(), server_default="false")
     is_active:       Mapped[bool]      = mapped_column(Boolean(), server_default="true")
+    is_deleted:      Mapped[bool]      = mapped_column(Boolean(), server_default="false")
     created_at:      Mapped[datetime]  = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"))
     updated_at:      Mapped[datetime]  = mapped_column(TIMESTAMP(timezone=True), server_default=text("now()"), onupdate=datetime.utcnow)
 

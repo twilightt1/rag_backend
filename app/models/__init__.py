@@ -6,6 +6,8 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.admin_audit import AdminActionLog
+from app.models.system_setting import SystemSetting
 
 __all__ = [
     "User",
@@ -16,4 +18,6 @@ __all__ = [
     "Message",
     "Document",
     "DocumentChunk",
+    "AdminActionLog",
+    "SystemSetting",
 ]

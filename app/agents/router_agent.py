@@ -25,57 +25,16 @@ CHITCHAT_PATTERN = re.compile(
     re.IGNORECASE
 )
 
-CONFIDENCE_THRESHOLDS = {
-    "rag":       0.70,
-    "summarize": 0.72,
-    "chitchat":  0.50,
-    "clarify":   0.00,
-}
-
-REWRITER_PROMPT = """You are a query rewriter for a Vietnamese RAG chatbot. Your only job is to rewrite the user's current query to be self-contained and unambiguous, using the conversation history as context.
-
-## Conversation history (last 3 turns):
-{history}
-
-## Current query:
-{query}
-
-## Rules:
-- If the query is already self-contained → return it UNCHANGED, word for word
-- If the query contains ambiguous pronouns ("nó", "cái đó", "vấn đề đó", "còn cái kia") → replace with the specific entity from history
-- If the query is missing a subject or object that is clearly implied by history → add it
-- Do NOT add information that is not present in the history
-- Do NOT explain or add preamble — return only the rewritten query as a plain string
-
-## Examples:
-History: "Chính sách bảo hành sản phẩm A là 12 tháng"
-Query: "Còn sản phẩm B thì sao?"
-Output: Chính sách bảo hành sản phẩm B là gì?
-
-History: "Hướng dẫn cài đặt Python trên Ubuntu"
-Query: "Nó có chạy trên Windows không?"
-Output: Python có chạy trên Windows không?
-
-History: (empty)
-Query: "Xin chào"
-Output: Xin chào
-
-## Output:"""
-
-ROUTER_SYSTEM = """You are an intent classifier for a Vietnamese RAG chatbot. Classify the user query into exactly one of the intents below.
+ROUTER_SYSTEM = """You are an intent classifier and query optimizer for a Vietnamese RAG chatbot.
+Given the user's query and conversation history, you must:
+1. Classify the intent
+2. Rewrite the query to be fully self-contained (resolving pronouns based on history)
+3. Generate 3 search variants (if intent is 'rag') for better retrieval coverage.
 
 ## Intent definitions:
-
 **chitchat** — Casual conversation that requires no document lookup.
-Examples: greetings, thanks, general comments, questions about the AI itself.
-
 **summarize** — A request to summarize or synthesize content from documents or the conversation.
-Examples: "tóm tắt lại", "tổng hợp các ý chính", "cho tôi overview về...", "điểm lại những gì đã nói".
-
 **rag** — A specific factual question that requires retrieving information from the knowledge base.
-Examples: questions about products, policies, procedures, technical specifications, internal guidelines.
-
-**clarify** — The query is too vague or ambiguous to classify confidently, even with conversation history.
 
 ---
 
@@ -91,123 +50,28 @@ Examples: questions about products, policies, procedures, technical specificatio
 Return ONLY valid JSON. No markdown, no explanation outside the JSON.
 
 {{
-  "intent": "<chitchat | summarize | rag | clarify>",
+  "intent": "<chitchat | summarize | rag>",
   "confidence": <float between 0.0 and 1.0>,
-  "reasoning": "<one short sentence explaining the classification>"
+  "reasoning": "<one short sentence explaining the classification>",
+  "rewritten_query": "<the self-contained version of the query>",
+  "search_variants": ["<variant 1>", "<variant 2>", "<variant 3>"]
 }}
 
-## Examples:
-{{"intent": "rag", "confidence": 0.95, "reasoning": "User is asking for specific product warranty terms"}}
-{{"intent": "chitchat", "confidence": 0.98, "reasoning": "Standard greeting, no document lookup needed"}}
-{{"intent": "clarify", "confidence": 0.80, "reasoning": "Query is only two words with no clear subject or context"}}
-{{"intent": "summarize", "confidence": 0.91, "reasoning": "User explicitly asked to summarize previous content"}}
-
+## Example Output:
+{{"intent": "rag", "confidence": 0.95, "reasoning": "User asks about product specs", "rewritten_query": "What are the specifications of product X?", "search_variants": ["Product X technical details", "Features of product X", "Product X datasheet"]}}
 ## Output:"""
-
-CLARIFY_PROMPT = """You are a helpful assistant. The user's query was too ambiguous to answer accurately.
-
-## Original query:
-"{query}"
-
-## Why clarification is needed:
-{reasoning}
-
-## Instructions:
-- Ask the user exactly ONE short, friendly follow-up question
-- Be specific about what information you need to answer correctly
-- Do not ask multiple things at once
-- Do not apologize excessively
-- Match the user's language (Vietnamese if they wrote in Vietnamese)
-
-## Output:"""
-
-# ROUTER_FIX
-async def query_rewriter_node(state: AgentState) -> AgentState:
-    state.setdefault("agent_trace", {})
-    query = state["query"].strip()
-    history = state.get("history", [])
-
-    # Get last 3 turns
-    recent_history = history[-3:] if history else []
-
-    if not recent_history:
-        state["rewritten_query"] = query
-        state["agent_trace"]["query_rewriter"] = "skipped (no history)"
-        return state
-
-    history_str = ""
-    for h in recent_history:
-        role = h.get("role", "unknown")
-        content = h.get("content", "")
-        history_str += f"{role.capitalize()}: {content}\n"
-
-    try:
-        client = _get_client()
-        prompt = REWRITER_PROMPT.format(history=history_str.strip(), query=query)
-
-        resp = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-            extra_headers={
-                "HTTP-Referer": settings.FRONTEND_URL,
-                "X-Title": "RAG Query Rewriter",
-            },
-        )
-        rewritten_query = resp.choices[0].message.content.strip()
-        state["rewritten_query"] = rewritten_query
-        state["agent_trace"]["query_rewriter"] = "rewritten"
-
-    except Exception as e:
-        log.error("Rewriter LLM error", extra={"error": str(e)})
-        state["rewritten_query"] = query
-        state["agent_trace"]["query_rewriter"] = f"error fallback: {str(e)}"
-
-    return state
-
-# ROUTER_FIX
-async def clarify_node(state: AgentState) -> AgentState:
-    state.setdefault("agent_trace", {})
-    query = state.get("query", "")
-    reasoning = state.get("clarify_reasoning", "The query is ambiguous.")
-
-    try:
-        client = _get_client()
-        prompt = CLARIFY_PROMPT.format(query=query, reasoning=reasoning)
-
-        resp = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
-            messages=[
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.0,
-            extra_headers={
-                "HTTP-Referer": settings.FRONTEND_URL,
-                "X-Title": "RAG Clarify",
-            },
-        )
-        clarify_msg = resp.choices[0].message.content.strip()
-        state["response"] = clarify_msg
-        state["agent_trace"]["clarify"] = "generated"
-
-    except Exception as e:
-        log.error("Clarify LLM error", extra={"error": str(e)})
-        state["response"] = "Xin lỗi, tôi không hiểu rõ câu hỏi của bạn. Bạn có thể nói rõ hơn được không?"
-        state["agent_trace"]["clarify"] = f"error fallback: {str(e)}"
-
-    return state
 
 # ROUTER_FIX
 async def router_agent(state: AgentState) -> AgentState:
     state.setdefault("agent_trace", {})
-    query = state.get("rewritten_query", state["query"]).strip()
+    query = state.get("query", "").strip()
     q_lower = query.lower()
 
     # Fast regex path
     if CHITCHAT_PATTERN.match(q_lower):
         state["query_type"] = "chitchat"
+        state["rewritten_query"] = query
+        state["search_variants"] = []
         state["router_confidence"] = 1.0
         state["router_reasoning"] = "Matched chitchat regex fast-path"
         state["agent_trace"]["router"] = "chitchat (regex)"
@@ -241,10 +105,8 @@ async def router_agent(state: AgentState) -> AgentState:
             },
         )
         result_text = resp.choices[0].message.content.strip()
-        print(f"DEBUG LLM OUTPUT: {result_text}")
 
-        # Sometime LLMs output "```json ... ```" or just text.
-        # Find the first { and the last }
+        # Parse JSON output robustly
         start_idx = result_text.find("{")
         end_idx = result_text.rfind("}")
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
@@ -257,33 +119,22 @@ async def router_agent(state: AgentState) -> AgentState:
             raise
 
         intent = result_json.get("intent", "rag").lower()
-        confidence = float(result_json.get("confidence", 0.0))
-        reasoning = result_json.get("reasoning", "No reasoning provided")
-
-        if intent not in ["rag", "chitchat", "summarize", "clarify"]:
+        if intent not in ["rag", "chitchat", "summarize"]:
             intent = "rag"
 
-        threshold = CONFIDENCE_THRESHOLDS.get(intent, 0.0)
-
-        if confidence < threshold:
-            state["query_type"] = "clarify"
-            state["clarify_reasoning"] = f"Original intent {intent} had low confidence ({confidence} < {threshold}). {reasoning}"
-            state["router_reasoning"] = state["clarify_reasoning"]
-            state["agent_trace"]["router"] = f"clarify (low confidence {confidence})"
-        else:
-            state["query_type"] = intent
-            if intent == "clarify":
-                 state["clarify_reasoning"] = reasoning
-            state["router_reasoning"] = reasoning
-            state["agent_trace"]["router"] = f"{intent} (llm)"
-
-        state["router_confidence"] = confidence
+        state["query_type"] = intent
+        state["router_confidence"] = float(result_json.get("confidence", 0.0))
+        state["router_reasoning"] = result_json.get("reasoning", "No reasoning provided")
+        state["rewritten_query"] = result_json.get("rewritten_query", query)
+        state["search_variants"] = result_json.get("search_variants", [])
+        state["agent_trace"]["router"] = f"{intent} (llm)"
 
     except Exception as e:
-        import traceback
-        log.error(f"Router LLM error: {traceback.format_exc()}")
+        log.error(f"Router LLM error: {str(e)}")
         # Safe default to chitchat on error
         state["query_type"] = "chitchat"
+        state["rewritten_query"] = query
+        state["search_variants"] = []
         state["router_confidence"] = 0.0
         state["router_reasoning"] = f"Error fallback: {str(e)}"
         state["agent_trace"]["router"] = "chitchat (error fallback)"

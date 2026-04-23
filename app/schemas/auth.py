@@ -84,6 +84,8 @@ class UserResponse(BaseModel):
     avatar_url:      str | None
     auth_provider:   str
     role:            str
+    is_active:       bool = True
+    is_deleted:      bool = False
     is_verified:     bool
     onboarding_done: bool
     created_at:      datetime

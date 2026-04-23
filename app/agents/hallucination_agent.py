@@ -22,7 +22,7 @@ COMBINED_SYSTEM = """You are an expert evaluator assessing an LLM generation.
 You must output a JSON object with exactly three keys:
 1. "is_grounded": boolean (true if the answer is grounded in and supported by the provided facts. False if it contains made-up information or contradicts the facts).
 2. "answers_question": boolean (true if the answer actually resolves the user's question, false if it evades or fails to answer it).
-3. "fallback_message": string (If either is_grounded is false OR answers_question is false, translate the phrase "There is no documentation that discusses this content." into the EXACT SAME LANGUAGE as the user's question. If both are true, this can be empty).
+3. "fallback_message": string (If either is_grounded is false OR answers_question is false, output the phrase "Tôi không tìm thấy thông tin về vấn đề này trong tài liệu.". If both are true, this can be empty).
 
 If the answer is essentially "I don't know" or "There is no information", then is_grounded=true but answers_question=false.
 Provide only the JSON object. No markdown, no explanations."""
@@ -57,23 +57,7 @@ async def hallucination_agent(state: AgentState) -> AgentState:
 
         will_save = not is_grounded or (not state["answers_question"] and retry_count >= 3)
         if will_save:
-            client = _get_client()
-            lang_prompt = f"Translate the following sentence to the same language as the user query.\n\nUser query: '{state['query']}'\n\nSentence to translate: 'There is no documentation that discusses this content.'\n\nReturn ONLY the translated sentence without quotes or explanations."
-            try:
-                t_resp = await client.chat.completions.create(
-                    model=settings.LLM_MODEL,
-                    messages=[{"role": "user", "content": lang_prompt}],
-                    temperature=0.0,
-                )
-                translated_msg = t_resp.choices[0].message.content.strip()
-                if translated_msg.startswith('"') and translated_msg.endswith('"'):
-                    translated_msg = translated_msg[1:-1]
-                if translated_msg.startswith("'") and translated_msg.endswith("'"):
-                    translated_msg = translated_msg[1:-1]
-                state["response"] = translated_msg
-            except Exception as e:
-                log.error("Translation LLM error", extra={"error": str(e)})
-                state["response"] = "There is no documentation that discusses this content."
+            state["response"] = "Tôi không tìm thấy thông tin về vấn đề này trong tài liệu."
         return state
 
     # Build context
@@ -116,7 +100,7 @@ async def hallucination_agent(state: AgentState) -> AgentState:
             if fallback:
                 state["response"] = fallback
             else:
-                state["response"] = "There is no documentation that discusses this content."
+                state["response"] = "Tôi không tìm thấy thông tin về vấn đề này trong tài liệu."
 
         state["agent_trace"]["hallucination"] = {
             "grounded": is_grounded,

@@ -7,13 +7,13 @@ class AgentState(TypedDict):
     user_id:         str
     conversation_id: str
     query:           str
-    rewritten_query: str          # output of query_rewriter_node
+    rewritten_query: str          # output of combined router
 
     # Router
     query_type:      str          # "rag" | "chitchat" | "summarize" | "clarify"
     router_confidence: float      # confidence score from router
     router_reasoning:  str        # reasoning string for debug/tracing
-    clarify_reasoning: str        # passed to clarify_node prompt
+    search_variants:   list[str]  # multi-query variants from router
 
     # Memory
     history:         list[dict]   # [{"role": "user"|"assistant", "content": "..."}]

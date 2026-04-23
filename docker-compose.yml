@@ -6,6 +6,13 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/ragdb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - CHROMA_HOST=chromadb
     depends_on:
       - postgres
       - redis
@@ -20,6 +27,13 @@ services:
   celery_worker:
     build: .
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/ragdb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - CHROMA_HOST=chromadb
     depends_on:
       - postgres
       - redis
@@ -29,6 +43,13 @@ services:
   celery_beat:
     build: .
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/ragdb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - CHROMA_HOST=chromadb
     depends_on:
       - redis
     command: celery -A app.tasks.celery_app beat -l INFO --scheduler celery.beat:PersistentScheduler
@@ -81,6 +102,13 @@ services:
   flower:
     build: .
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/ragdb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MINIO_ENDPOINT=minio:9000
+      - CHROMA_HOST=chromadb
     depends_on:
       - redis
     command: celery -A app.tasks.celery_app flower --port=5555
