@@ -1,4 +1,4 @@
-# 🚀 Hệ Thống RAG Đa Tác Tử (Multi-Agentic RAG System)
+# 🚀 Hệ Thống RAG(RAG System)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python" />
@@ -12,7 +12,7 @@
 
 ## 🌟 Tổng Quan
 
-Một hệ thống backend **RAG (Retrieval-Augmented Generation) Đa Tác Tử hiện đại** với hiệu suất cao. Backend này sử dụng **LangGraph** để điều phối các luồng dữ liệu phức tạp, đảm bảo độ chính xác cao trong việc truy xuất, xếp hạng lại (reranking) tinh vi, và định tuyến linh hoạt các truy vấn của người dùng.
+Một hệ thống backend **RAG (Retrieval-Augmented Generation)** với hiệu suất cao. Backend này sử dụng **LangGraph** để điều phối các luồng dữ liệu phức tạp, đảm bảo độ chính xác cao trong việc truy xuất, xếp hạng lại (reranking) tinh vi, và định tuyến linh hoạt các truy vấn của người dùng.
 
 Được thiết kế để có khả năng mở rộng và hiệu suất ở cấp độ sản phẩm thực tế (production-grade), hệ thống tích hợp tìm kiếm lai (hybrid search), bộ nhớ thông minh và phản hồi dạng luồng (streaming) qua SSE.
 
@@ -22,7 +22,7 @@ Một hệ thống backend **RAG (Retrieval-Augmented Generation) Đa Tác Tử 
 
 | Tính Năng | Mô Tả |
 | :--- | :--- |
-| **🤖 Luồng Làm Việc Đa Tác Tử** | Điều phối nhiều bước, có trạng thái sử dụng LangGraph (Tác tử Định tuyến, Đánh giá, Ảo giác, v.v.). |
+| **🤖 Luồng Làm Việc** | Điều phối nhiều bước, có trạng thái sử dụng LangGraph (Tác tử Định tuyến, Đánh giá, Ảo giác, v.v.). |
 | **🧭 Định Tuyến Động** | Phân loại thông minh các truy vấn thành `rag` (truy xuất), `chitchat` (trò chuyện), `summarize` (tóm tắt), hoặc `clarify` (làm rõ). |
 | **🔍 Tìm Kiếm Lai** | Kết hợp Tìm kiếm Ngữ nghĩa **Vector** (ChromaDB) với tìm kiếm từ vựng **BM25** thông qua RRF. |
 | **🎯 Xếp Hạng Lại (Reranking) Nâng Cao** | Tinh chỉnh cross-encoder sử dụng **Jina AI Reranker** để đạt độ chính xác hàng đầu. |
@@ -38,7 +38,7 @@ Một hệ thống backend **RAG (Retrieval-Augmented Generation) Đa Tác Tử 
 - **Điều Phối (Orchestration)**: [LangGraph](https://python.langchain.com/docs/langgraph) / [LangChain](https://python.langchain.com/)
 - **Cơ Sở Dữ Liệu Vector**: [ChromaDB](https://www.trychroma.com/)
 - **Xếp Hạng Lại (Reranker)**: [Jina AI](https://jina.ai/)
-- **Nhúng (Embedder)**: NVIDIA Llama-Nemotron
+- **Nhúng (Embedder)**: Text 3 Small (OpenAI)
 - **Cơ Sở Dữ Liệu**: [PostgreSQL](https://www.postgresql.org/) với SQLAlchemy (Bất đồng bộ)
 - **Lưu Trữ Đối Tượng (Object Storage)**: [MinIO](https://min.io/) (Tương thích S3)
 - **Bộ Nhớ Đệm & Tác Vụ**: [Redis](https://redis.io/) & [Celery](https://docs.celeryq.dev/)
@@ -121,7 +121,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/2
 
 # 🤖 LLM (OpenRouter)
 OPENROUTER_API_KEY=your_openrouter_key
-LLM_MODEL=google/gemma-2-9b-it
+LLM_MODEL=openai/gpt-4o-mini
 
 # 🎯 Jina Reranker
 JINA_API_KEY=your_jina_key
