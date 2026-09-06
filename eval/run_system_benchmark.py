@@ -92,12 +92,32 @@ def _parse_session_date(raw: str) -> datetime | None:
     return datetime(year, month, day, hour, minute, tzinfo=UTC)
 
 
-async def ingest_instance(user_id, instance, run_dir: Path) -> int:
+def _session_title(session, instance, max_chars: int = 120) -> str:
+    """Title a session memory from its first substantive user turn.
+
+    The embedder concatenates title + content (vector_store helper), so a
+    topical title anchors the embedding on what the session is ABOUT —
+    per-turn fragments ("user turn — <qid>") gave the embedder nothing to
+    match a query against. This was the primary retrieval failure mode in
+    the per-turn run (multi-session 2/8 vs baseline 5/8).
+    """
+    for turn in session.turns:
+        text = " ".join((turn.content or "").split())
+        if len(text) >= 24:
+            return text[:max_chars]
+    return f"Conversation {session.session_id} ({instance.question_id})"
+
+
+async def ingest_instance(user_id, instance, run_dir: Path, session_level: bool = True,
+                          chunk_chars: int = 0) -> int:
     """Ingest one instance's haystack as memories (real embed + index).
 
-    Returns the number of memories created. Each session becomes memories
-    per turn, with captured_at from the session date so temporal ordering
-    and salience decay see realistic timestamps.
+    Session-level strategy (v2): ONE memory per haystack session — the full
+    turn-by-turn transcript as content, a topical title derived from the
+    first substantive user turn, captured_at from the session date. A
+    session is the unit a LongMemEval answer lives in: per-turn fragments
+    scattered the answer's context across 500+ low-context rows and
+    salience/recency ranking surfaced the wrong ones (PR #14: 0.450).
     """
     from uuid import uuid4
 
@@ -111,21 +131,86 @@ async def ingest_instance(user_id, instance, run_dir: Path) -> int:
         session_dt = _parse_session_date(session.date) or datetime(
             2023, 1, 1, tzinfo=UTC
         )
+        if session_level:
+            turn_lines = [
+                f"{turn.role}: {turn.content}"
+                for turn in session.turns
+                if turn.content.strip()
+            ]
+            if not turn_lines:
+                continue
+            full_text = "\n\n".join(turn_lines)
+            if chunk_chars and len(full_text) > chunk_chars:
+                # Turn-aligned chunking: pack whole turns into ≤chunk_chars
+                # blocks. A 17k-char session as ONE memory dilutes the
+                # embedding (the per-session run missed its answer session
+                # in the top-25 vector hits); per-turn fragments lose local
+                # context. ~4k-char chunks keep both.
+                chunks: list[list[str]] = []
+                current: list[str] = []
+                current_len = 0
+                for line in turn_lines:
+                    if current and current_len + len(line) > chunk_chars:
+                        chunks.append(current)
+                        current, current_len = [], 0
+                    current.append(line)
+                    current_len += len(line)
+                if current:
+                    chunks.append(current)
+                for chunk_no, chunk in enumerate(chunks, 1):
+                    memories.append(
+                        Memory(
+                            id=uuid4(),
+                            user_id=user_id,
+                            title=(
+                                f"{_session_title(session, instance)} "
+                                f"[{chunk_no}/{len(chunks)}]"
+                            )[:500],
+                            content="\n\n".join(chunk),
+                            summary=None,
+                            tags=["longmemeval", instance.question_type],
+                            source_type="other",
+                            source_ref=(
+                                f"bench:{instance.question_id}:"
+                                f"{session.session_id}:{chunk_no}"
+                            ),
+                            captured_at=session_dt,
+                        )
+                    )
+            else:
+                memories.append(
+                    Memory(
+                        id=uuid4(),
+                        user_id=user_id,
+                        title=_session_title(session, instance)[:500],
+                        content=full_text[:20_000],
+                        summary=None,
+                        tags=["longmemeval", instance.question_type],
+                        source_type="other",
+                        source_ref=(
+                            f"bench:{instance.question_id}:{session.session_id}"
+                        ),
+                        captured_at=session_dt,
+                    )
+                )
+            continue
+        # per-turn strategy (v1, kept for A/B reproduction)
         for turn in session.turns:
             content = turn.content[:8000]
             if not content.strip():
                 continue
-            title = f"{turn.role} turn — {instance.question_id}"
             memories.append(
                 Memory(
                     id=uuid4(),
                     user_id=user_id,
-                    title=title[:500],
+                    title=f"{turn.role} turn — {instance.question_id}"[:500],
                     content=content,
                     summary=None,
                     tags=["longmemeval", instance.question_type],
                     source_type="other",
-                    source_ref=f"bench:{instance.question_id}:{session.session_id}",
+                    source_ref=(
+                        f"bench:{instance.question_id}:{session.session_id}"
+                    ),
                     captured_at=session_dt,
                 )
             )
@@ -206,10 +291,14 @@ async def judge_one(client, instance, response: str) -> bool:
     return verdict == "correct"
 
 
-async def run_instance(client, user_id, instance, top_k, run_dir: Path) -> dict:
+async def run_instance(client, user_id, instance, top_k, run_dir: Path,
+                      session_level: bool = True, chunk_chars: int = 0) -> dict:
     t0 = time.time()
     try:
-        ingested = await ingest_instance(user_id, instance, run_dir)
+        ingested = await ingest_instance(
+            user_id, instance, run_dir, session_level=session_level,
+            chunk_chars=chunk_chars,
+        )
         response, recalled = await answer_from_stack(user_id, instance, top_k)
         correct = await judge_one(client, instance, response)
         error = None
@@ -282,7 +371,12 @@ async def main_async(args) -> int:
     records: list[dict] = []
     t0 = time.time()
     for inst in selected:  # sequential: one user, deterministic ingest order
-        records.append(await run_instance(client, benchmark_user_id, inst, args.top_k, run_dir))
+        records.append(
+            await run_instance(
+                client, benchmark_user_id, inst, args.top_k, run_dir,
+                session_level=args.session, chunk_chars=args.chunk_chars,
+            )
+        )
     total = round(time.time() - t0, 1)
 
     errors = [r for r in records if r["error"]]
@@ -310,6 +404,7 @@ async def main_async(args) -> int:
     payload = {
         "benchmark": "longmemeval_s",
         "run_kind": "orivory_stack",
+        "chunking": "session_level" if args.session else "per_turn",
         "note": (
             "REAL dataset, REAL Orivory stack (SQLite + local Chroma + Jina "
             "embeddings + MemoryRetriever salience/rerank), REAL judge. Same "
@@ -339,7 +434,12 @@ async def main_async(args) -> int:
         "timestamp_utc": datetime.now(UTC).isoformat(),
         "per_question": records,
     }
-    out = ROOT / "eval/benchmarks/results/longmemeval_s_system.json"
+    chunking = "session_level" if args.session else "per_turn"
+    out = ROOT / (
+        "eval/benchmarks/results/longmemeval_s_system.json"
+        if chunking == "per_turn"
+        else "eval/benchmarks/results/longmemeval_s_system_session.json"
+    )
     out.write_text(json.dumps(payload, indent=2))
     print(f"\nSYSTEM mean: {mean:.3f} ({correct}/{len(scored)}, errors={len(errors)})")
     if comparison:
@@ -356,6 +456,14 @@ def main() -> int:
     parser.add_argument("--n", type=int, default=20)
     parser.add_argument("--seed", type=int, default=20260906)
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--session", action="store_true",
+                        help="session-level memories (v2 strategy) — "
+                             "one memory per haystack session")
+    parser.add_argument("--chunk-chars", type=int, default=0,
+                        help="split each session into turn-aligned chunks of "
+                             "at most this many chars (session-level only; "
+                             "0 = one memory per session, the diluting "
+                             "extreme) — the RAG sweet spot is ~4000")
     args = parser.parse_args()
     return asyncio.run(main_async(args))
 
