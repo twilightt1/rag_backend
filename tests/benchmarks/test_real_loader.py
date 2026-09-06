@@ -1,8 +1,6 @@
 """Regression: real LongMemEval-S ships numeric golds — loader coerces."""
 from __future__ import annotations
 
-import os
-
 from eval.benchmarks.longmemeval_s import _require_str
 
 
