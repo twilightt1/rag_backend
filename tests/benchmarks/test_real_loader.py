@@ -25,7 +25,7 @@ def test_require_str_accepts_strings():
     assert _require_str({"answer": "Runkeeper"}, "answer", "ctx") == "Runkeeper"
 
 
-def test_vector_store_collection_wrapped_in_local_mode():
+def test_vector_store_collection_wrapped_in_local_mode(monkeypatch):
     """Regression from the real system run: local (lite) Chroma returns a
     sync Collection whose count()/query() are plain ints/lists — call sites
     `await` them. The wrapper must be applied to the COLLECTION too, not
@@ -36,10 +36,15 @@ def test_vector_store_collection_wrapped_in_local_mode():
     from pathlib import Path
 
     with tempfile.TemporaryDirectory() as tmp:
-        os.environ["CHROMA_MODE"] = "local"
-        os.environ["CHROMA_LOCAL_PATH"] = str(Path(tmp) / "chroma")
-
+        # Patch settings, not just env: app.config.settings is a module
+        # singleton built at first import (likely BEFORE this test set any
+        # env), and vector_store reads settings.* — env changes alone are
+        # invisible in a combined test run.
+        from app.config import settings
         from app.retrieval.memory import vector_store
+
+        monkeypatch.setattr(settings, "CHROMA_MODE", "local")
+        monkeypatch.setattr(settings, "CHROMA_LOCAL_PATH", str(Path(tmp) / "chroma"))
 
         # Reset cached clients — earlier tests may have built one against
         # a different (read-only) path; the singleton would ignore ours.
