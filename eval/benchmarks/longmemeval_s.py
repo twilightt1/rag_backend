@@ -57,8 +57,12 @@ def _require(obj: dict, field: str, ctx: str) -> object:
     return obj[field]
 
 
-def _require_str(obj: dict, field: str, ctx: str) -> str:
+def _require_str(obj: dict, field: str, ctx: str, coerce_number: bool = False) -> str:
     value = _require(obj, field, ctx)
+    if coerce_number and isinstance(value, (int, float)) and not isinstance(value, bool):
+        # LongMemEval-S ships 32/500 numeric golds (e.g. 3 for "how many");
+        # both the exact-match guard and the judge consume the string form.
+        return str(value)
     if not isinstance(value, str):
         raise ValueError(f"{ctx}: field {field!r} must be a string, got {type(value).__name__}")
     return value
@@ -129,7 +133,7 @@ def load_instances(path: Path) -> list[BenchmarkInstance]:
                 question_id=_require_str(record, "question_id", ctx),
                 question_type=_require_str(record, "question_type", ctx),
                 question=_require_str(record, "question", ctx),
-                answer=_require_str(record, "answer", ctx),
+                answer=_require_str(record, "answer", ctx, coerce_number=True),
                 question_date=_require_str(record, "question_date", ctx),
                 sessions=sessions,
                 answer_session_ids=frozenset(answer_session_ids),
