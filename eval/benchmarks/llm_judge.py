@@ -58,7 +58,13 @@ def build_judge_messages(question: str, answer: str, response: str) -> list[dict
 
 
 async def judge_answer(question: str, answer: str, response: str) -> bool:
-    """Judge one answer via the LLM. True = equivalent to gold."""
+    """Judge one answer via the LLM. True = equivalent to gold.
+
+    Honors ``OPENAI_BASE_URL`` (local gateways / proxies) and
+    ``BENCHMARK_JUDGE_MODEL`` (default ``gpt-4o-mini`` — the model is part
+    of the run's honesty record, so it is read at call time and reported in
+    every results file).
+    """
     import os
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -70,14 +76,21 @@ async def judge_answer(question: str, answer: str, response: str) -> bool:
 
     from openai import AsyncOpenAI
 
-    client = AsyncOpenAI(api_key=api_key)
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url=os.environ.get("OPENAI_BASE_URL"),
+    )
     messages = build_judge_messages(question, answer, response)
     completion = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=os.environ.get("BENCHMARK_JUDGE_MODEL", "gpt-4o-mini"),
         messages=messages,
         temperature=0.0,
         max_tokens=8,
     )
-    verdict = (completion.choices[0].message.content or "").strip().lower()
+    verdict = (completion.choices[0].message.content or "").strip().lower().strip("`.*!\n ")
     log.info("benchmark judge verdict", verdict=verdict, question=question[:80])
-    return "correct" in verdict
+    # EXACT token match: "correct" is a substring of "incorrect", so a naive
+    # substring test flips every rejection into a pass — caught by a real
+    # gateway run (the fixture pilot scored 2/2 while wrong answers also
+    # "passed"). Judge semantics: one token, correct OR incorrect.
+    return verdict == "correct"
