@@ -160,10 +160,32 @@ def _get_sync_client():
 @_with_retry()
 async def _get_collection():
     cli = await _get_async_client()
-    return await cli.get_or_create_collection(
+    collection = await cli.get_or_create_collection(
         COLLECTION_NAME,
         metadata={"hnsw:space": "cosine"},
     )
+    # Local (lite) mode: the client wrapper only covers client-level calls —
+    # the collection itself is the raw sync object, and call sites await
+    # collection.count()/query()/upsert(). Route the collection through the
+    # same sync→async adapter so every call site works in both modes.
+    if settings.CHROMA_MODE == "local":
+        sync_inner = getattr(collection, "_inner", None)
+        target = sync_inner if sync_inner is not None else collection
+
+        class _SyncAsAsync:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def __getattr__(self, name):
+                attr = getattr(self._inner, name)
+
+                async def _call(*args, **kwargs):
+                    return attr(*args, **kwargs)
+
+                return _call
+
+        return _SyncAsAsync(target)
+    return collection
 
 
 # ── memory <-> document helpers ─────────────────────────────────────────────
