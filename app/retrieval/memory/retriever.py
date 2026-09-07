@@ -56,6 +56,7 @@ class MemoryRetriever:
         entity_boost_per_match: float = 0.3,
         entity_boost_max: float = 1.0,
         rerank_factor: int = 3,
+        decay_floor: float = 0.1,
     ) -> None:
         self.db = db
         self.user_id = user_id
@@ -63,6 +64,7 @@ class MemoryRetriever:
         self.entity_boost_per_match = entity_boost_per_match
         self.entity_boost_max = entity_boost_max
         self.rerank_factor = rerank_factor
+        self.decay_floor = decay_floor
 
     # ── main entry point ─────────────────────────────────────────────────
 
@@ -158,6 +160,7 @@ class MemoryRetriever:
                 salience=float(memory.salience or 0.5),
                 pinned=bool(memory.pinned),
                 half_life_days=self.half_life_days,
+                decay_floor=self.decay_floor,
             )
 
             reasons = boost_reasons + decay_reasons
