@@ -27,16 +27,25 @@ def time_decay_score(
     pinned: bool = False,
     now: datetime | None = None,
     half_life_days: float = 30.0,
+    decay_floor: float = 0.1,
 ) -> tuple[float, list[str]]:
     """
     Combine vector-similarity score with salience + recency.
 
     Formula:
-        score = base * (0.5 + salience) * exp(-age_days / half_life) * pinned_mult
+        score = base * (0.5 + salience) * decay * pinned_mult
 
     - ``salience`` ∈ [0, 1] → multiplier ∈ [0.5, 1.5]
-    - 30-day-old memory → ×0.5; 90-day-old → ×0.25
     - ``pinned`` → ×1.5 (evergreen)
+
+    Decay is a FLOOR at ``decay_floor`` (default 0.1): unbounded exponential
+    decay made semantic match irrelevant for anything older than a few
+    months — a 2023 memory scored against a 2026 "now" got decay ≈ 1e-16,
+    so ranking became pure noise (measured in the LongMemEval runs: the
+    full-context baseline beat the stack 0.600 vs 0.450/0.300). With the
+    floor, semantic match always dominates and recency only breaks ties
+    among near-equal vector scores. Set ``decay_floor=0.0`` to restore the
+    unbounded behavior.
 
     Returns ``(new_score, match_reasons)``.
     """
@@ -52,7 +61,7 @@ def time_decay_score(
     age_seconds = max(0.0, (now - captured_at).total_seconds())
     age_days = age_seconds / 86400.0
 
-    decay = math.exp(-age_days / half_life_days)
+    decay = max(decay_floor, math.exp(-age_days / half_life_days))
     salience_mult = 0.5 + float(salience)         # 0.5x .. 1.5x
     pinned_mult = 1.5 if pinned else 1.0           # +50% for pinned
 

@@ -242,7 +242,9 @@ async def stack_recall(user_id, query: str, top_k: int) -> list[dict]:
         return [
             {
                 "title": m.title,
-                "content": (m.content or "")[:1200],
+                # 4000 chars: matches the ingest chunk size — a 1200-char
+                # excerpt truncated 4k chunks mid-context (PR #15 finding).
+                "content": (m.content or "")[:4000],
                 "captured_at": m.captured_at.isoformat() if m.captured_at else None,
             }
             for m in getattr(response, "results", []) or []
